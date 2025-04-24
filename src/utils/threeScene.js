@@ -7,6 +7,9 @@ import { pastelColors } from "./colorPalette";
 
 /**
  * 创建 three.js 场景并返回控制 API
+ * @param {HTMLCanvasElement} canvasEl
+ * @param {Object} furnitureTree
+ * @param {(path:string[])=>void} onSelect 回调：高亮对象后，把 path 告诉 Pinia
  */
 export function createThreeContext(canvasEl, furnitureTree, onSelect) {
     const scene = new THREE.Scene();
@@ -32,8 +35,10 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
     orbit.enableDamping = true;
 
     // 柔和环境光 + 方向光
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    const ambientCol = new THREE.Color(0xffffff).convertSRGBToLinear();
+    scene.add(new THREE.AmbientLight(ambientCol, 1.0));
+    const dirCol = new THREE.Color(0xffffff).convertSRGBToLinear();
+    const dirLight = new THREE.DirectionalLight(dirCol, 0.6);
     dirLight.position.set(300, 600, 500);
     scene.add(dirLight);
 
@@ -67,13 +72,15 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
 
             /* --------- NEW: 给每个 mesh 加可见边框线 --------- */
             const edgeGeom = new THREE.EdgesGeometry(geom, 20);
+            // 将 sRGB 灰色转换到线性空间
+            const edgeCol = new THREE.Color(0x555555).convertSRGBToLinear();
             const edgeMat = new THREE.LineBasicMaterial({
-                color: 0x555555,
+                color: edgeCol,
                 transparent: true,
                 opacity: 0.4
-            });
+            }); // 如果觉得边框还不够“亮”或“柔和”，也可以在这个基础上微调 opacity（比如 0.6）或换一个浅一点的灰（例如 0x777777）
             const edges = new THREE.LineSegments(edgeGeom, edgeMat);
-            mesh.add(edges); // 直接作为子物体挂在 mesh 上，跟随缩放/移动
+            mesh.add(edges);// 直接作为子物体挂在 mesh 上，跟随缩放/移动
 
             /****************************************************/
 
