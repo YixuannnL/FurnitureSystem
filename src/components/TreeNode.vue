@@ -22,19 +22,24 @@
   
   <script setup>
   import { ref, computed } from "vue";
-  import { useSceneStore } from "../store/";
+  import { useSceneStore } from "../store";
   import TreeNode from "./TreeNode.vue";
   
   const props = defineProps({ node: Object, depth: { type: Number, default: 0 } });
   const open = ref(true);
   const hasChildren = computed(() => props.node.children.length);
   const store = useSceneStore();
+  
   const selected = computed(
     () => store.currentNodePath.join("/") === props.node.path.join("/")
   );
+  
   function selectNode() {
     store.currentNodePath = props.node.path;
+    // 高亮对应 mesh / 组
+    store.threeCtx?.highlightPath(props.node.path);
   }
+  
   function toggle() {
     open.value = !open.value;
   }

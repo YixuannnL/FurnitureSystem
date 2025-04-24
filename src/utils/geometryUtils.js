@@ -10,14 +10,16 @@
  *    }
  */
 export function buildFurnitureTree(meta, path = []) {
+    const isLeaf = !meta.children || meta.children.length === 0;
     const node = {
         name: meta.object,
         type: meta.object_type,
         dims: meta.dimensions ?? null,
         path,
-        children: []
+        children: [],
+        isLeaf
     };
-    if (meta.children?.length) {
+    if (!isLeaf) {
         node.children = meta.children.map((c) =>
             buildFurnitureTree(c.meta, [...path, c.meta.object])
         );

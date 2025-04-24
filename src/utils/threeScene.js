@@ -66,7 +66,7 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
         group.name = node.path.join("/");
         parentGroup.add(group);
 
-        if (node.dims) {
+        if (node.isLeaf && node.dims) {
             const geom = dimsToBoxGeom(node.dims);
             const mesh = new THREE.Mesh(geom, makeMaterial());
 
@@ -106,6 +106,29 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
     });
     scene.add(tc.getHelper());
 
+    /* ---------- 高亮逻辑 ---------- */
+    function highlightPath(selectedPath = []) {
+        const targetStr = selectedPath.join("/");
+        meshMap.forEach((mesh, pathStr) => {
+            const isTarget =
+                !targetStr || pathStr.startsWith(targetStr); // 空数组 => 全亮
+            mesh.material.transparent = !isTarget;
+            mesh.material.opacity = isTarget ? 1 : 0.15;
+            mesh.material.needsUpdate = true;
+
+            /* -------- 灰色边框线 -------- */
+            mesh.children.forEach((child) => {
+                if (child.isLineSegments) {
+                    child.material.transparent = !isTarget;
+                    // 目标保持原来的 0.4，不相关的则几乎完全透明
+                    child.material.opacity = isTarget ? 0.4 : 0.03;
+                    child.material.needsUpdate = true;
+                }
+            });
+        });
+    }
+
+
     // Raycaster 选择
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -114,12 +137,12 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
         mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(Array.from(meshMap.values()), true);
+        const intersects = raycaster.intersectObjects([...meshMap.values()], false);
         if (intersects.length) {
-            const mesh = intersects[0].object;
-            selectMesh(mesh);
+            selectMesh(intersects[0].object);
         } else {
             selectMesh(null);
+            highlightPath([]);
         }
     }
     renderer.domElement.addEventListener("pointerdown", onPointer);
@@ -131,6 +154,7 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
             boxHelper.setFromObject(mesh);
             boxHelper.visible = true;
             tc.attach(mesh);
+            highlightPath(mesh.userData.path);
             onSelect(mesh.userData.path);
         } else {
             boxHelper.visible = false;
@@ -170,6 +194,7 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
         orbit,
         transformControls: tc,
         meshMap,
-        setMode
+        setMode,
+        highlightPath  // 暴露给树面板调用
     };
 }
