@@ -1,0 +1,527 @@
+{
+    "meta": {
+        "object": "sideboard",
+        "object_type": "group",
+        "dimensions": {
+            "width": 1600,
+            "height": 800,
+            "depth": 450
+        },
+        "children": [
+            {
+                "meta": {
+                    "object": "sideboard_frame",
+                    "object_type": "group",
+                    "dimensions": {
+                        "width": 1600,
+                        "height": 800,
+                        "depth": 450
+                    },
+                    "children": [
+                        {
+                            "meta": {
+                                "object": "back_panel",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 1600,
+                                    "height": 800,
+                                    "depth": 3
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "left_side_panel",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 3,
+                                    "height": 650,
+                                    "depth": 450
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "right_side_panel",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 3,
+                                    "height": 650,
+                                    "depth": 450
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "top_panel",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 1600,
+                                    "height": 3,
+                                    "depth": 450
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "bottom_panel",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 1600,
+                                    "height": 3,
+                                    "depth": 450
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "horizontal_divide_panel",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 1600,
+                                    "height": 3,
+                                    "depth": 450
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "central_vertical_panel",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 3,
+                                    "height": 497,
+                                    "depth": 450
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "meta": {
+                    "object": "sideboard_base",
+                    "object_type": "group",
+                    "dimensions": {
+                        "width": 1600,
+                        "height": 150,
+                        "depth": 450
+                    },
+                    "children": [
+                        {
+                            "meta": {
+                                "object": "vertical_support_panel_front_left",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 3,
+                                    "height": 150,
+                                    "depth": 3
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "vertical_support_panel_front_right",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 3,
+                                    "height": 150,
+                                    "depth": 3
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "vertical_support_panel_back_left",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 3,
+                                    "height": 150,
+                                    "depth": 3
+                                }
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "vertical_support_panel_back_right",
+                                "object_type": "board",
+                                "dimensions": {
+                                    "width": 3,
+                                    "height": 150,
+                                    "depth": 3
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "meta": {
+                    "object": "sideboard_drawers",
+                    "object_type": "group",
+                    "children": [
+                        {
+                            "meta": {
+                                "object": "drawer_left",
+                                "object_type": "group",
+                                "dimensions": {
+                                    "width": 533.3,
+                                    "height": 150,
+                                    "depth": 400
+                                },
+                                "children": [
+                                    {
+                                        "meta": {
+                                            "object": "drawer_back",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 3
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_front",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 18
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_left_side",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_right_side",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_bottom",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 3,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_felt_lining",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "drawer_middle",
+                                "object_type": "group",
+                                "dimensions": {
+                                    "width": 533.3,
+                                    "height": 150,
+                                    "depth": 400
+                                },
+                                "children": [
+                                    {
+                                        "meta": {
+                                            "object": "drawer_back",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 3
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_front",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 18
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_left_side",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_right_side",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_bottom",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 3,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_felt_lining",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "drawer_right",
+                                "object_type": "group",
+                                "dimensions": {
+                                    "width": 533.3,
+                                    "height": 150,
+                                    "depth": 400
+                                },
+                                "children": [
+                                    {
+                                        "meta": {
+                                            "object": "drawer_back",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 3
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_front",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 18
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_left_side",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_right_side",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_bottom",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 3,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "drawer_felt_lining",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 533.3,
+                                                "height": 150,
+                                                "depth": 400
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "meta": {
+                    "object": "sideboard_cabinets",
+                    "object_type": "group",
+                    "children": [
+                        {
+                            "meta": {
+                                "object": "cabinet_left",
+                                "object_type": "group",
+                                "dimensions": {
+                                    "width": 797,
+                                    "height": 497,
+                                    "depth": 450
+                                },
+                                "children": [
+                                    {
+                                        "meta": {
+                                            "object": "adjustable_shelf_1",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 797,
+                                                "height": 3,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "adjustable_shelf_2",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 797,
+                                                "height": 3,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "cabinet_door_left",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 398.5,
+                                                "height": 497,
+                                                "depth": 18
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "cabinet_door_right",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 398.5,
+                                                "height": 497,
+                                                "depth": 18
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "meta": {
+                                "object": "cabinet_right",
+                                "object_type": "group",
+                                "dimensions": {
+                                    "width": 797,
+                                    "height": 497,
+                                    "depth": 450
+                                },
+                                "children": [
+                                    {
+                                        "meta": {
+                                            "object": "adjustable_shelf_1",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 797,
+                                                "height": 3,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "adjustable_shelf_2",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 797,
+                                                "height": 3,
+                                                "depth": 400
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "cabinet_door_left",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 398.5,
+                                                "height": 497,
+                                                "depth": 18
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "meta": {
+                                            "object": "cabinet_door_right",
+                                            "object_type": "board",
+                                            "dimensions": {
+                                                "width": 398.5,
+                                                "height": 497,
+                                                "depth": 18
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}

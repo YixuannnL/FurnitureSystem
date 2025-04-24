@@ -1,0 +1,383 @@
+{
+    "data": [
+        {
+            "sideboard_base": "<Vertical_Support_Panel_Back_Right><Board>[<TopEnd>]",
+            "sideboard_frame": "<Bottom_Panel><Board>[<BottomFace>]"
+        },
+        {
+            "sideboard_frame": "<Horizontal_Divide_Panel><Board>[<TopFace>]",
+            "sideboard_drawers": ""
+        },
+        {
+            "sideboard_frame": "<Horizontal_Divide_Panel><Board>[<BottomFace>]",
+            "sideboard_cabinets": ""
+        },
+        {
+            "left_side_panel": "<Left_Side_Panel><Board>[<BackEdge>]",
+            "back_panel": "<Back_Panel><Board>[<LeftEdge>]"
+        },
+        {
+            "right_side_panel": "<Right_Side_Panel><Board>[<BackEdge>]",
+            "back_panel": "<Back_Panel><Board>[<RightEdge>]"
+        },
+        {
+            "top_panel": "<Top_Panel><Board>[<BackEdge>]",
+            "back_panel": "<Back_Panel><Board>[<TopEdge>]"
+        },
+        {
+            "bottom_panel": "<Bottom_Panel><Board>[<BackEdge>]",
+            "back_panel": "<Back_Panel><Board>[<BottomEdge>]"
+        },
+        {
+            "central_vertical_panel": "<Central_Vertical_Panel><Board>[<BackFace>]",
+            "back_panel": "<Back_Panel><Board>[<FrontFace>]"
+        },
+        {
+            "top_panel": "<Top_Panel><Board>[<LeftEdge>]",
+            "left_side_panel": "<Left_Side_Panel><Board>[<TopEdge>]"
+        },
+        {
+            "bottom_panel": "<Bottom_Panel><Board>[<LeftEdge>]",
+            "left_side_panel": "<Left_Side_Panel><Board>[<BottomEdge>]"
+        },
+        {
+            "central_vertical_panel": "<Central_Vertical_Panel><Board>[<LeftFace>]",
+            "left_side_panel": "<Left_Side_Panel><Board>[<RightFace>]"
+        },
+        {
+            "top_panel": "<Top_Panel><Board>[<RightEdge>]",
+            "right_side_panel": "<Right_Side_Panel><Board>[<TopEdge>]"
+        },
+        {
+            "bottom_panel": "<Bottom_Panel><Board>[<RightEdge>]",
+            "right_side_panel": "<Right_Side_Panel><Board>[<BottomEdge>]"
+        },
+        {
+            "central_vertical_panel": "<Central_Vertical_Panel><Board>[<RightFace>]",
+            "right_side_panel": "<Right_Side_Panel><Board>[<LeftFace>]"
+        },
+        {
+            "horizontal_divide_panel": "<Horizontal_Divide_Panel><Board>[<TopFace>]",
+            "top_panel": "<Top_Panel><Board>[<BottomFace>]"
+        },
+        {
+            "central_vertical_panel": "<Central_Vertical_Panel><Board>[<TopEdge>]",
+            "top_panel": "<Top_Panel><Board>[<BottomFace>]"
+        },
+        {
+            "horizontal_divide_panel": "<Horizontal_Divide_Panel><Board>[<BottomFace>]",
+            "bottom_panel": "<Bottom_Panel><Board>[<TopFace>]"
+        },
+        {
+            "central_vertical_panel": "<Central_Vertical_Panel><Board>[<BottomEdge>]",
+            "bottom_panel": "<Bottom_Panel><Board>[<TopFace>]"
+        },
+        {
+            "drawer_left_side": "<Drawer_Left_Side><Board>[<BackEnd>]",
+            "drawer_back": "<Drawer_Back><Board>[<LeftEdge>]"
+        },
+        {
+            "drawer_right_side": "<Drawer_Right_Side><Board>[<BackEnd>]",
+            "drawer_back": "<Drawer_Back><Board>[<RightEdge>]"
+        },
+        {
+            "drawer_bottom": "<Drawer_Bottom><Board>[<BackEdge>]",
+            "drawer_back": "<Drawer_Back><Board>[<BottomEdge>]"
+        },
+        {
+            "drawer_left_side": "<Drawer_Left_Side><Board>[<FrontEnd>]",
+            "drawer_front": "<Drawer_Front><Board>[<LeftEdge>]"
+        },
+        {
+            "drawer_right_side": "<Drawer_Right_Side><Board>[<FrontEnd>]",
+            "drawer_front": "<Drawer_Front><Board>[<RightEdge>]"
+        },
+        {
+            "drawer_bottom": "<Drawer_Bottom><Board>[<FrontEdge>]",
+            "drawer_front": "<Drawer_Front><Board>[<BottomEdge>]"
+        },
+        {
+            "drawer_bottom": "<Drawer_Bottom><Board>[<LeftEdge>]",
+            "drawer_left_side": "<Drawer_Left_Side><Board>[<BottomEdge>]"
+        },
+        {
+            "drawer_bottom": "<Drawer_Bottom><Board>[<RightEdge>]",
+            "drawer_right_side": "<Drawer_Right_Side><Board>[<BottomEdge>]"
+        },
+        {
+            "drawer_felt_lining": "<Drawer_Felt_Lining><Board>[<BottomFace>]",
+            "drawer_bottom": "<Drawer_Bottom><Board>[<TopFace>]"
+        },
+        {
+            "drawer_back": "<Drawer_Back><Board>[<FrontFace>]",
+            "drawer_felt_lining": ""
+        },
+        {
+            "drawer_front": "<Drawer_Front><Board>[<BackFace>]",
+            "drawer_felt_lining": ""
+        },
+        {
+            "drawer_left_side": "<Drawer_Left_Side><Board>[<RightFace>]",
+            "drawer_felt_lining": ""
+        },
+        {
+            "drawer_right_side": "<Drawer_Right_Side><Board>[<LeftFace>]",
+            "drawer_felt_lining": ""
+        }
+    ],
+    "meta_data": [
+        {
+            "row_headers": [
+                "",
+                "Sideboard_Frame",
+                "Sideboard_Base",
+                "Sideboard_Drawers",
+                "Sideboard_Cabinets"
+            ],
+            "column_header": [
+                "Sideboard_Frame",
+                "Sideboard_Frame",
+                "Sideboard_Frame",
+                "Sideboard_Frame",
+                "Sideboard_Base",
+                "Sideboard_Drawers",
+                "Sideboard_Cabinets"
+            ],
+            "title": "table_1",
+            "data": [
+                {
+                    "sideboard_base": "<Vertical_Support_Panel_Back_Right><Board>[<TopEnd>]",
+                    "sideboard_frame": "<Bottom_Panel><Board>[<BottomFace>]"
+                },
+                {
+                    "sideboard_frame": "<Horizontal_Divide_Panel><Board>[<TopFace>]",
+                    "sideboard_drawers": ""
+                },
+                {
+                    "sideboard_frame": "<Horizontal_Divide_Panel><Board>[<BottomFace>]",
+                    "sideboard_cabinets": ""
+                }
+            ]
+        },
+        {
+            "row_headers": [
+                "",
+                "Back_Panel",
+                "Left_Side_Panel",
+                "Right_Side_Panel",
+                "Top_Panel",
+                "Bottom_Panel",
+                "Horizontal_Divide_Panel",
+                "Central_Vertical_Panel"
+            ],
+            "column_header": [
+                "Back_Panel",
+                "Left_Side_Panel",
+                "Right_Side_Panel",
+                "Top_Panel",
+                "Bottom_Panel",
+                "Horizontal_Divide_Panel",
+                "Central_Vertical_Panel"
+            ],
+            "title": "table_2",
+            "data": [
+                {
+                    "left_side_panel": "<Left_Side_Panel><Board>[<BackEdge>]",
+                    "back_panel": "<Back_Panel><Board>[<LeftEdge>]"
+                },
+                {
+                    "right_side_panel": "<Right_Side_Panel><Board>[<BackEdge>]",
+                    "back_panel": "<Back_Panel><Board>[<RightEdge>]"
+                },
+                {
+                    "top_panel": "<Top_Panel><Board>[<BackEdge>]",
+                    "back_panel": "<Back_Panel><Board>[<TopEdge>]"
+                },
+                {
+                    "bottom_panel": "<Bottom_Panel><Board>[<BackEdge>]",
+                    "back_panel": "<Back_Panel><Board>[<BottomEdge>]"
+                },
+                {
+                    "central_vertical_panel": "<Central_Vertical_Panel><Board>[<BackFace>]",
+                    "back_panel": "<Back_Panel><Board>[<FrontFace>]"
+                },
+                {
+                    "top_panel": "<Top_Panel><Board>[<LeftEdge>]",
+                    "left_side_panel": "<Left_Side_Panel><Board>[<TopEdge>]"
+                },
+                {
+                    "bottom_panel": "<Bottom_Panel><Board>[<LeftEdge>]",
+                    "left_side_panel": "<Left_Side_Panel><Board>[<BottomEdge>]"
+                },
+                {
+                    "central_vertical_panel": "<Central_Vertical_Panel><Board>[<LeftFace>]",
+                    "left_side_panel": "<Left_Side_Panel><Board>[<RightFace>]"
+                },
+                {
+                    "top_panel": "<Top_Panel><Board>[<RightEdge>]",
+                    "right_side_panel": "<Right_Side_Panel><Board>[<TopEdge>]"
+                },
+                {
+                    "bottom_panel": "<Bottom_Panel><Board>[<RightEdge>]",
+                    "right_side_panel": "<Right_Side_Panel><Board>[<BottomEdge>]"
+                },
+                {
+                    "central_vertical_panel": "<Central_Vertical_Panel><Board>[<RightFace>]",
+                    "right_side_panel": "<Right_Side_Panel><Board>[<LeftFace>]"
+                },
+                {
+                    "horizontal_divide_panel": "<Horizontal_Divide_Panel><Board>[<TopFace>]",
+                    "top_panel": "<Top_Panel><Board>[<BottomFace>]"
+                },
+                {
+                    "central_vertical_panel": "<Central_Vertical_Panel><Board>[<TopEdge>]",
+                    "top_panel": "<Top_Panel><Board>[<BottomFace>]"
+                },
+                {
+                    "horizontal_divide_panel": "<Horizontal_Divide_Panel><Board>[<BottomFace>]",
+                    "bottom_panel": "<Bottom_Panel><Board>[<TopFace>]"
+                },
+                {
+                    "central_vertical_panel": "<Central_Vertical_Panel><Board>[<BottomEdge>]",
+                    "bottom_panel": "<Bottom_Panel><Board>[<TopFace>]"
+                }
+            ]
+        },
+        {
+            "row_headers": [
+                "",
+                "Vertical_Support_Panel_Front_Left",
+                "Vertical_Support_Panel_Front_Right",
+                "Vertical_Support_Panel_Back_Left",
+                "Vertical_Support_Panel_Back_Right"
+            ],
+            "column_header": [
+                "Vertical_Support_Panel_Front_Left",
+                "Vertical_Support_Panel_Front_Right",
+                "Vertical_Support_Panel_Back_Left",
+                "Vertical_Support_Panel_Back_Right"
+            ],
+            "title": "table_3",
+            "data": []
+        },
+        {
+            "row_headers": [
+                "",
+                "Drawer_Left",
+                "Drawer_Middle",
+                "Drawer_Right"
+            ],
+            "column_header": [
+                "Drawer_Left",
+                "Drawer_Middle",
+                "Drawer_Right"
+            ],
+            "title": "table_4",
+            "data": []
+        },
+        {
+            "row_headers": [
+                "",
+                "Drawer_Back",
+                "Drawer_Front",
+                "Drawer_Left_Side",
+                "Drawer_Right_Side",
+                "Drawer_Bottom",
+                "Drawer_Felt_Lining"
+            ],
+            "column_header": [
+                "Drawer_Back",
+                "Drawer_Front",
+                "Drawer_Left_Side",
+                "Drawer_Right_Side",
+                "Drawer_Bottom",
+                "Drawer_Felt_Lining"
+            ],
+            "title": "table_5",
+            "data": [
+                {
+                    "drawer_left_side": "<Drawer_Left_Side><Board>[<BackEnd>]",
+                    "drawer_back": "<Drawer_Back><Board>[<LeftEdge>]"
+                },
+                {
+                    "drawer_right_side": "<Drawer_Right_Side><Board>[<BackEnd>]",
+                    "drawer_back": "<Drawer_Back><Board>[<RightEdge>]"
+                },
+                {
+                    "drawer_bottom": "<Drawer_Bottom><Board>[<BackEdge>]",
+                    "drawer_back": "<Drawer_Back><Board>[<BottomEdge>]"
+                },
+                {
+                    "drawer_left_side": "<Drawer_Left_Side><Board>[<FrontEnd>]",
+                    "drawer_front": "<Drawer_Front><Board>[<LeftEdge>]"
+                },
+                {
+                    "drawer_right_side": "<Drawer_Right_Side><Board>[<FrontEnd>]",
+                    "drawer_front": "<Drawer_Front><Board>[<RightEdge>]"
+                },
+                {
+                    "drawer_bottom": "<Drawer_Bottom><Board>[<FrontEdge>]",
+                    "drawer_front": "<Drawer_Front><Board>[<BottomEdge>]"
+                },
+                {
+                    "drawer_bottom": "<Drawer_Bottom><Board>[<LeftEdge>]",
+                    "drawer_left_side": "<Drawer_Left_Side><Board>[<BottomEdge>]"
+                },
+                {
+                    "drawer_bottom": "<Drawer_Bottom><Board>[<RightEdge>]",
+                    "drawer_right_side": "<Drawer_Right_Side><Board>[<BottomEdge>]"
+                },
+                {
+                    "drawer_felt_lining": "<Drawer_Felt_Lining><Board>[<BottomFace>]",
+                    "drawer_bottom": "<Drawer_Bottom><Board>[<TopFace>]"
+                },
+                {
+                    "drawer_back": "<Drawer_Back><Board>[<FrontFace>]",
+                    "drawer_felt_lining": ""
+                },
+                {
+                    "drawer_front": "<Drawer_Front><Board>[<BackFace>]",
+                    "drawer_felt_lining": ""
+                },
+                {
+                    "drawer_left_side": "<Drawer_Left_Side><Board>[<RightFace>]",
+                    "drawer_felt_lining": ""
+                },
+                {
+                    "drawer_right_side": "<Drawer_Right_Side><Board>[<LeftFace>]",
+                    "drawer_felt_lining": ""
+                }
+            ]
+        },
+        {
+            "row_headers": [
+                "",
+                "Cabinet_Left",
+                "Cabinet_Right"
+            ],
+            "column_header": [
+                "Cabinet_Left",
+                "Cabinet_Right"
+            ],
+            "title": "table_6",
+            "data": []
+        },
+        {
+            "row_headers": [
+                "",
+                "Adjustable_Shelf_1",
+                "Adjustable_Shelf_2",
+                "Cabinet_Door_Left",
+                "Cabinet_Door_Right"
+            ],
+            "column_header": [
+                "Adjustable_Shelf_1",
+                "Adjustable_Shelf_2",
+                "Cabinet_Door_Left",
+                "Cabinet_Door_Right"
+            ],
+            "title": "table_7",
+            "data": []
+        }
+    ]
+}
