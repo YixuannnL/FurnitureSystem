@@ -129,6 +129,20 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
     }
 
 
+    /** 隔离显示：只对 pathArr 内的叶子 mesh 可见 */
+    function isolatePath(pathArr = []) {
+        const t = pathArr.join("/");
+        meshMap.forEach((mesh, key) => {
+            mesh.visible = !t || key.startsWith(t);
+        });
+        // 选中框如失焦需隐藏
+        if (boxHelper.visible && !boxHelper.object.visible) {
+            boxHelper.visible = false;
+            tc.detach();
+        }
+    }
+
+
     // Raycaster 选择
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -142,6 +156,7 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
         downX = ev.clientX;
         downY = ev.clientY;
 
+        // 先检测是否点到 mesh
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
@@ -168,9 +183,7 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
 
     renderer.domElement.addEventListener("pointerdown", pointerDown);
 
-    let currentMesh = null;
     function selectMesh(mesh) {
-        currentMesh = mesh;
         if (mesh) {
             boxHelper.setFromObject(mesh);
             boxHelper.visible = true;
@@ -217,6 +230,7 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
         transformControls: tc,
         meshMap,
         setMode,
-        highlightPath  // 暴露给树面板调用
+        highlightPath,  // 暴露给树面板调用
+        isolatePath     // 供 Pinia / TreeNode 调用
     };
 }

@@ -45,3 +45,14 @@ import * as THREE from "three";
 export function dimsToBoxGeom({ width, height, depth }) {
     return new THREE.BoxGeometry(width, height, depth);
 }
+
+/** 取得所有非叶子 group 的 path（自底向上、左→右） */
+export function collectGroupsBottomUp(root) {
+    const result = [];
+    function dfs(node) {
+        node.children.forEach((c) => dfs(c));
+        if (!node.isLeaf && node.path.length) result.push(node.path);
+    }
+    dfs(root);
+    return result; // 已经是自底向上
+}

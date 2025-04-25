@@ -1,10 +1,29 @@
 <template>
     <div class="toolbar">
-      <button v-for="b in btns" :key="b.mode" :class="{ active: mode === b.mode }" @click="set(b.mode)">
+      <!-- 操作模式按钮 -->
+      <button
+        v-for="b in btns"
+        :key="b.mode"
+        :class="{ active: mode === b.mode }"
+        @click="set(b.mode)"
+      >
         {{ b.label }}
       </button>
+  
+      <!-- 第 1 步：遍历子结构 -->
+      <button
+        v-if="step === 1"
+        @click="nextGroup"
+        :disabled="!hasMoreGroup"
+      >
+        下一个子结构
+      </button>
+  
+      <!-- 主要步骤切换 -->
       <button @click="prev" :disabled="step === 0">上一步</button>
       <button @click="next" :disabled="step === 3">下一步</button>
+  
+      <!-- 完成导出 -->
       <button v-if="step === 3" @click="exportData">导出数据</button>
     </div>
   </template>
@@ -17,6 +36,8 @@
   const store = useSceneStore();
   const mode = computed(() => store.mode);
   const step = computed(() => store.step);
+  const hasMoreGroup = computed(() => store.hasMoreGroup);
+  
   const btns = [
     { mode: "connect", label: "连接" },
     { mode: "planar", label: "共面伸缩" },
@@ -32,6 +53,9 @@
   }
   function prev() {
     store.prevStep();
+  }
+  function nextGroup() {
+    store.nextGroup();
   }
   function exportData() {
     exportJson(store.furnitureTree, store.connections);

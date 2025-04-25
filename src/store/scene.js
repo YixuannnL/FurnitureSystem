@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import metaRaw from "../data/meta_data.json";
 import connRaw from "../data/conn_data.json";
-import { buildFurnitureTree } from "../utils/geometryUtils";
+import { buildFurnitureTree, collectGroupsBottomUp } from "../utils/geometryUtils";
 
 export const useSceneStore = defineStore("scene", {
     state: () => ({
@@ -16,25 +16,71 @@ export const useSceneStore = defineStore("scene", {
         /** 连接数据（数组） */
         connections: connRaw.data,
         /** 操作模式："connect"|"planar"|"axis"|"drag" */
-        mode: "drag"
+        mode: "drag",
+        /** 第 1 步用到的遍历队列 */
+        groupPaths: [],
+        groupIdx: -1
     }),
+
+    getters: {
+        hasMoreGroup(state) {
+            return state.groupIdx >= 0 && state.groupIdx < state.groupPaths.length - 1;
+        }
+    },
+
     actions: {
         setThreeCtx(ctx) {
             this.threeCtx = ctx;
+            // 如果此刻正处于 group 隔离状态，需要立刻应用
+            if (this.step === 1 && this.groupIdx >= 0 && this.groupPaths.length) {
+                ctx.isolatePath(this.groupPaths[this.groupIdx]);
+            }
         },
+
         setMode(m) {
             this.mode = m;
             this.threeCtx?.setMode(m);
         },
+
+        /** ---------- 步骤切换 ---------- */
+        goStep(n) {
+            if (n < 0 || n > 3 || n === this.step) return;
+
+            /* 离开第 1 步：取消隔离 */
+            if (this.step === 1 && n !== 1) {
+                this.threeCtx?.isolatePath([]);
+                this.groupPaths = [];
+                this.groupIdx = -1;
+            }
+
+            /* 进入第 1 步：准备自底向上遍历队列 */
+            if (n === 1) {
+                this.groupPaths = collectGroupsBottomUp(this.furnitureTree);
+                this.groupIdx = 0;
+                this.currentNodePath = this.groupPaths[0] ?? [];
+                this.threeCtx?.isolatePath(this.currentNodePath);
+            }
+
+            this.step = n;
+        },
+
         nextStep() {
-            if (this.step < 3) this.step += 1;
+            this.goStep(this.step + 1);
         },
+
         prevStep() {
-            if (this.step > 0) this.step -= 1;
+            this.goStep(this.step - 1);
         },
-        goStep(i) {
-            if (i >= 0 && i <= 3) this.step = i;
+
+        /** ---------- 子结构遍历 ---------- */
+        nextGroup() {
+            if (!this.hasMoreGroup) return;
+            this.groupIdx += 1;
+            this.currentNodePath = this.groupPaths[this.groupIdx];
+            this.threeCtx?.isolatePath(this.currentNodePath);
         },
+
+
         updateConnections(newConns) {
             this.connections = newConns;
         }

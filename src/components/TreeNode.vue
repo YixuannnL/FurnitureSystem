@@ -36,8 +36,14 @@
   
   function selectNode() {
     store.currentNodePath = props.node.path;
-    // 高亮对应 mesh / 组
-    store.threeCtx?.highlightPath(props.node.path);
+  
+    if (store.step === 1) {
+      // 第 1 步：隔离显示
+      store.threeCtx?.isolatePath(props.node.path);
+    } else {
+      // 其它步骤：半透明高亮
+      store.threeCtx?.highlightPath(props.node.path);
+    }
   }
   
   function toggle() {
