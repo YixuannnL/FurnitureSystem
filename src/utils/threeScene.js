@@ -132,20 +132,41 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
     // Raycaster 选择
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    function onPointer(e) {
+
+    let downX = 0,
+        downY = 0;
+
+    const CLICK_DIST = 6; // px² 阈值
+
+    function pointerDown(ev) {
+        downX = ev.clientX;
+        downY = ev.clientY;
+
         const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects([...meshMap.values()], false);
-        if (intersects.length) {
-            selectMesh(intersects[0].object);
-        } else {
+
+        const hit = raycaster.intersectObjects([...meshMap.values()], false);
+        if (hit.length) {
+            selectMesh(hit[0].object);
+            return; // 点到了 mesh，直接结束
+        }
+
+        // 没点到 mesh：等待 pointerup 判定是否为“点击”
+        window.addEventListener("pointerup", pointerUp, { once: true });
+    }
+
+    function pointerUp(ev) {
+        const dx = ev.clientX - downX;
+        const dy = ev.clientY - downY;
+        if (dx * dx + dy * dy < CLICK_DIST * CLICK_DIST) {
+            // 认为是单击空白 → 取消高亮
             selectMesh(null);
-            highlightPath([]);
         }
     }
-    renderer.domElement.addEventListener("pointerdown", onPointer);
+
+    renderer.domElement.addEventListener("pointerdown", pointerDown);
 
     let currentMesh = null;
     function selectMesh(mesh) {
@@ -159,6 +180,7 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
         } else {
             boxHelper.visible = false;
             tc.detach();
+            highlightPath([]);            // 取消高亮放这里
             onSelect([]);
         }
     }
