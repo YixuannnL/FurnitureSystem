@@ -19,7 +19,9 @@ export const useSceneStore = defineStore("scene", {
         mode: "drag",
         /** 第 1 步用到的遍历队列 */
         groupPaths: [],
-        groupIdx: -1
+        groupIdx: -1,
+        /** ★ 记录已访问过的子结构，首次进入时用来触发“清空+排布” */
+        visitedGroups: new Set()
     }),
 
     getters: {
@@ -56,8 +58,9 @@ export const useSceneStore = defineStore("scene", {
             if (n === 1) {
                 this.groupPaths = collectGroupsBottomUp(this.furnitureTree);
                 this.groupIdx = 0;
+                this.visitedGroups.clear();
                 this.currentNodePath = this.groupPaths[0] ?? [];
-                this.threeCtx?.isolatePath(this.currentNodePath);
+                this.enterCurrentGroup();
             }
 
             this.step = n;
@@ -75,14 +78,45 @@ export const useSceneStore = defineStore("scene", {
         nextGroup() {
             if (!this.hasMoreGroup) return;
             this.groupIdx += 1;
-            this.currentNodePath = this.groupPaths[this.groupIdx];
-            this.threeCtx?.isolatePath(this.currentNodePath);
+            this.enterCurrentGroup();
         },
         prevGroup() {
             if (!this.hasPrevGroup) return;
             this.groupIdx -= 1;
+            this.enterCurrentGroup();
+        },
+        /** 统一处理：隔离 + 首次进入逻辑 */
+        enterCurrentGroup() {
             this.currentNodePath = this.groupPaths[this.groupIdx];
             this.threeCtx?.isolatePath(this.currentNodePath);
+            this.firstVisitGroup(this.currentNodePath);   // ★
+        },
+
+        /** ---------- 首次进入子结构：清空内部连接并排布 ---------- */
+        firstVisitGroup(pathArr) {
+            const key = pathArr.join("/");
+            if (this.visitedGroups.has(key)) return;
+
+            /* 1) 取出该组内部全部 leaf 名 */
+            const leafNames = [];
+            this.threeCtx?.meshMap.forEach((_, k) => {
+                if (k.startsWith(key)) leafNames.push(k.split("/").at(-1));
+            });
+            const nameSet = new Set(leafNames);
+
+            /* 2) 过滤掉内部连接 */
+            const newConns = this.connections.filter(c => {
+                const [a, b] = Object.keys(c);
+                return !(nameSet.has(a) && nameSet.has(b));
+            });
+            if (newConns.length !== this.connections.length) {
+                this.updateConnections(newConns);
+            }
+
+            /* 3) 将内部 mesh 一字排开 */
+            this.threeCtx?.layoutGroupLine(pathArr);
+
+            this.visitedGroups.add(key);
         },
 
 

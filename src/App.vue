@@ -11,8 +11,9 @@
       </section>
 
       <aside class="right">
-        <ConnectionPanel v-if="step !== 3" />
-        <SizeAdjustPanel v-else />
+        <GroupPanel        v-if="step === 1" />
+        <ConnectionPanel   v-else-if="step !== 3" />
+        <SizeAdjustPanel   v-else />
       </aside>
     </main>
     <footer><Toolbar /></footer>
@@ -27,6 +28,7 @@ import FurnitureScene from "./components/FurnitureScene.vue";
 import ConnectionPanel from "./components/ConnectionPanel.vue";
 import SizeAdjustPanel from "./components/SizeAdjustPanel.vue";
 import Toolbar from "./components/Toolbar.vue";
+import GroupPanel from "./components/GroupPanel.vue";
 import { useSceneStore } from "./store";
 const store = useSceneStore();
 const step = computed(() => store.step);

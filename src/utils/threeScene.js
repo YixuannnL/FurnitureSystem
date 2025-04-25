@@ -1,5 +1,6 @@
 
 import * as THREE from "three";
+import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { dimsToBoxGeom } from "./geometryUtils";
@@ -30,6 +31,18 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.5;
+
+    /* ---------- 2-D 标签渲染器 ---------- */
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(canvasEl.clientWidth, canvasEl.clientHeight);
+    labelRenderer.domElement.style.position = "absolute";
+    labelRenderer.domElement.style.top = "0";
+    labelRenderer.domElement.style.pointerEvents = "none";
+    // 让 <canvas> 包装容器成为定位上下文
+    canvasEl.parentElement.style.position = "relative";
+    canvasEl.parentElement.appendChild(labelRenderer.domElement);
+
+    let nameLabel = null;               // 当前 mesh 的名称标签
 
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
@@ -85,7 +98,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
             /****************************************************/
             const pathStr = node.path.join("/");
-            mesh.userData = { pathArr: node.path, pathStr };
+            mesh.userData = { pathArr: node.path, path: node.path, pathStr };
             group.add(mesh);
 
             meshMap.set(pathStr, mesh);
@@ -122,9 +135,9 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
 
     // 选中辅助框
-    const boxHelper = new THREE.BoxHelper();
-    boxHelper.visible = false;
-    scene.add(boxHelper);
+    // const boxHelper = new THREE.BoxHelper();
+    // boxHelper.visible = false;
+    // scene.add(boxHelper);
 
     // TransformControls
     const tc = new TransformControls(camera, renderer.domElement);
@@ -133,6 +146,11 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         orbit.enabled = !e.value;
     });
     scene.add(tc.getHelper());
+
+    /* 用于判断“本次 pointerDown 是否点在 gizmo 轴上” */
+    function isClickingGizmo() {
+        return tc.enabled && tc.axis !== null;   // axis 在 TransformControls 内部 pointerDown 时已被赋值
+    }
 
     let selectedMesh = null;          // 当前 TransformControls 绑在哪个 mesh
     let component = [];               // 该 mesh 所在的连通分量 pathStr[]
@@ -183,11 +201,11 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         meshMap.forEach((mesh, key) => {
             mesh.visible = !t || key.startsWith(t);
         });
-        // 选中框如失焦需隐藏
-        if (boxHelper.visible && !boxHelper.object.visible) {
-            boxHelper.visible = false;
-            tc.detach();
-        }
+        // // 选中框如失焦需隐藏
+        // if (boxHelper.visible && !boxHelper.object.visible) {
+        //     boxHelper.visible = false;
+        //     tc.detach();
+        // }
     }
 
 
@@ -201,6 +219,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     const CLICK_DIST = 6; // px² 阈值
 
     function pointerDown(ev) {
+        /* 若在手柄上按下，则完全交给 TransformControls 处理，阻断我们自己的选取逻辑 */
+        if (isClickingGizmo()) return;
         downX = ev.clientX;
         downY = ev.clientY;
 
@@ -231,20 +251,52 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
     renderer.domElement.addEventListener("pointerdown", pointerDown);
 
+    /* ---------- 新增：将一组 mesh 排成一行 ---------- */
+    function layoutGroupLine(pathArr, spacing = 200) {
+        const prefix = pathArr.join("/");
+        const meshes = [];
+        meshMap.forEach((m, k) => { if (k.startsWith(prefix)) meshes.push(m); });
+        if (!meshes.length) return;
+
+        meshes.sort((a, b) => a.userData.pathStr.localeCompare(b.userData.pathStr));
+        const start = -(meshes.length - 1) * spacing * 0.5;
+        meshes.forEach((m, i) => m.position.set(start + i * spacing, 0, 0));
+    }
+
+
     function selectMesh(mesh) {
+        if (nameLabel) { nameLabel.parent?.remove(nameLabel); nameLabel = null; }
         if (mesh) {
             selectedMesh = mesh;
             component = findComponent(mesh.userData.pathStr);
-            boxHelper.setFromObject(mesh);
-            boxHelper.visible = true;
+            // boxHelper.setFromObject(mesh);
+            // boxHelper.visible = true;
             tc.attach(mesh);
+            /* 只有当 tc.enabled (drag / scale 模式) 时才 attach */
+            if (tc.enabled) tc.attach(mesh);
+
+
             prevPos.copy(mesh.position);
-            highlightPath(mesh.userData.path);
-            onSelect(mesh.userData.path);
+            highlightPath(mesh.userData.pathArr);   // 始终是数组
+            onSelect(mesh.userData.pathArr);
+
+            /* 在 mesh 上方挂文字标签 */
+            const div = document.createElement("div");
+            div.className = "mesh-name-label";
+            div.textContent = mesh.userData.pathArr.at(-1);
+            div.style.padding = "2px 4px";
+            div.style.fontSize = "12px";
+            div.style.background = "rgba(255,255,255,0.75)";
+            div.style.borderRadius = "3px";
+            div.style.color = "#333";
+            nameLabel = new CSS2DObject(div);
+            const { height = 0 } = mesh.geometry.parameters;
+            nameLabel.position.set(0, height * 0.55 + 10, 0);
+            mesh.add(nameLabel);
         } else {
             selectedMesh = null;
             component = [];
-            boxHelper.visible = false;
+            // boxHelper.visible = false;
             tc.detach();
             highlightPath([]);            // 取消高亮放这里
             onSelect([]);
@@ -265,12 +317,28 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         });
     });
 
-    // 模式切换
+    // ------------------ 模式切换：唯一入口 ------------------
     function setMode(mode) {
-        if (mode === "connect" || mode === "drag") {
-            tc.setMode("translate");
-        } else if (mode === "planar" || mode === "axis") {
-            tc.setMode("scale");
+        switch (mode) {
+            case "drag":
+                tc.enabled = true;
+                tc.setMode("translate");
+                /* 重新绑定当前 mesh */
+                if (selectedMesh) tc.attach(selectedMesh);
+                break;
+
+            case "planar":
+            case "axis":
+                tc.enabled = true;
+                tc.setMode("scale");     // 伸缩共用 scale
+                if (selectedMesh) tc.attach(selectedMesh);
+                break;
+
+            case "connect":
+            default:
+                tc.detach();
+                tc.enabled = false;      // 完全禁用 gizmo，避免鼠标命中
+                break;
         }
     }
 
@@ -279,6 +347,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         requestAnimationFrame(animate);
         orbit.update();
         renderer.render(scene, camera);
+        labelRenderer.render(scene, camera);
     }
     animate();
 
@@ -304,6 +373,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         /** 当连接数据变动时调用 */
         updateConnections(newConns) {
             rebuildGraph(newConns);
-        }
+        },
+
+        layoutGroupLine
     };
 }
