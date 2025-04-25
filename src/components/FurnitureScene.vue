@@ -14,7 +14,10 @@
   const store = useSceneStore();
   const canvasEl = ref(null);
   const step = computed(() => store.step);
-  const groupName = computed(() => store.currentNodePath.at(-1) ?? "");
+  const groupName = computed(() => {
+  const arr = store.currentNodePath;
+  return arr && arr.length ? arr[arr.length - 1] : "";
+});
   
   onMounted(() => {
     const ctx = createThreeContext(

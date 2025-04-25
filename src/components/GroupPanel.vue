@@ -27,15 +27,23 @@
   import { useSceneStore } from "../store";
   const store = useSceneStore();
   
-  const groupName = computed(() => store.currentGroupPath.at(-1) || "");
+//   const groupName = computed(() => store.currentGroupPath.at(-1) || "");
+const groupName = computed(() => {
+  const arr = store.currentNodePath;
+  return arr && arr.length ? arr[arr.length - 1] : "";
+});
   
   const meshNames = computed(() => {
     /* 收集当前 group 内叶子 mesh 名字 */
     const names = [];
-    const t = store.currentGroupPath.join("/");
-    store.threeCtx?.meshMap.forEach((_,k)=>{
-      if(k.startsWith(t)) names.push(k.split("/").at(-1));
-    });
+    const prefix = store.currentNodePath.join("/");
+      store.threeCtx?.meshMap.forEach((_, key) => {
+    if (key.startsWith(prefix)) {
+      const parts = key.split("/");
+      names.push(parts[parts.length - 1]);
+    }
+  });
+
     return names;
   });
   
@@ -58,7 +66,7 @@
   adding.value = false;
 }
 function del(i) {
-  const idx = store.connections.indexOf(localConns.value[i]);
+      const idx = store.connections.indexOf(conn);
   if (idx > -1) {
     const next = store.connections.slice();
     next.splice(idx, 1);

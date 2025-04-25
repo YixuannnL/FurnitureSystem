@@ -1,30 +1,20 @@
 <template>
     <div class="toolbar">
-      <!-- 操作模式 -->
-      <button
-        v-for="b in btns"
-        :key="b.mode"
-        :class="{ active: mode === b.mode }"
-        @click="set(b.mode)"
-      >
-        {{ b.label }}
-      </button>
+    <!-- ★ 操作模式按钮：Step0 仅留 drag，其他步骤保留全部 -->
+    <button
+      v-for="b in visibleBtns"
+      :key="b.mode"
+      :class="{ active: mode === b.mode }"
+      @click="set(b.mode)"
+    >
+      {{ b.label }}
+    </button>
   
-      <!-- 第 1 步：子结构遍历 -->
-      <template v-if="step === 1">
-        <button
-          @click="prevGroup"
-          :disabled="!hasPrevGroup"
-        >
-          上一个子结构
-        </button>
-        <button
-          @click="nextGroup"
-          :disabled="!hasMoreGroup"
-        >
-          下一个子结构
-        </button>
-      </template>
+    <!-- Step 1 子结构遍历 -->
+    <template v-if="step === 1">
+      <button @click="prevGroup" :disabled="!hasPrevGroup">上一个子结构</button>
+      <button @click="nextGroup" :disabled="!hasMoreGroup">下一个子结构</button>
+    </template>
   
       <!-- 主步骤切换 -->
       <button @click="prev" :disabled="step === 0">上一步</button>
@@ -44,14 +34,20 @@
   const mode = computed(() => store.mode);
   const step = computed(() => store.step);
   const hasMoreGroup = computed(() => store.hasMoreGroup);
-  const hasPrevGroup = computed(() => store.hasPrevGroup);   // ★ 新增
+  const hasPrevGroup = computed(() => store.hasPrevGroup);   
   
-  const btns = [
-    { mode: "connect", label: "连接" },
-    { mode: "planar", label: "共面伸缩" },
-    { mode: "axis", label: "XYZ 伸缩" },
-    { mode: "drag", label: "拖动" }
-  ];
+/* --- 所有模式按钮 --- */
+const allBtns = [
+  { mode: "connect", label: "连接" },
+  { mode: "planar",  label: "共面伸缩" },
+  { mode: "axis",    label: "XYZ 伸缩" },
+  { mode: "drag",    label: "拖动" }
+];
+
+/* ★ Step 0 只显示 drag */
+const visibleBtns = computed(() =>
+  step.value === 0 ? allBtns.filter(b => b.mode === "drag") : allBtns
+);
   
   function set(m)        { store.setMode(m); }
   function next()        { store.nextStep(); }

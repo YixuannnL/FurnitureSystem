@@ -63,6 +63,11 @@ export const useSceneStore = defineStore("scene", {
                 this.enterCurrentGroup();
             }
 
+            /* 回到 Step 0：强制设为 drag，防止残留的连接/伸缩手柄 */
+            if (n === 0) {
+                this.setMode("drag");
+            }
+
             this.step = n;
         },
 
