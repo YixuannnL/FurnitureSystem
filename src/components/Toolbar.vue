@@ -1,6 +1,6 @@
 <template>
     <div class="toolbar">
-      <!-- 操作模式按钮 -->
+      <!-- 操作模式 -->
       <button
         v-for="b in btns"
         :key="b.mode"
@@ -10,16 +10,23 @@
         {{ b.label }}
       </button>
   
-      <!-- 第 1 步：遍历子结构 -->
-      <button
-        v-if="step === 1"
-        @click="nextGroup"
-        :disabled="!hasMoreGroup"
-      >
-        下一个子结构
-      </button>
+      <!-- 第 1 步：子结构遍历 -->
+      <template v-if="step === 1">
+        <button
+          @click="prevGroup"
+          :disabled="!hasPrevGroup"
+        >
+          上一个子结构
+        </button>
+        <button
+          @click="nextGroup"
+          :disabled="!hasMoreGroup"
+        >
+          下一个子结构
+        </button>
+      </template>
   
-      <!-- 主要步骤切换 -->
+      <!-- 主步骤切换 -->
       <button @click="prev" :disabled="step === 0">上一步</button>
       <button @click="next" :disabled="step === 3">下一步</button>
   
@@ -37,6 +44,7 @@
   const mode = computed(() => store.mode);
   const step = computed(() => store.step);
   const hasMoreGroup = computed(() => store.hasMoreGroup);
+  const hasPrevGroup = computed(() => store.hasPrevGroup);   // ★ 新增
   
   const btns = [
     { mode: "connect", label: "连接" },
@@ -45,21 +53,12 @@
     { mode: "drag", label: "拖动" }
   ];
   
-  function set(m) {
-    store.setMode(m);
-  }
-  function next() {
-    store.nextStep();
-  }
-  function prev() {
-    store.prevStep();
-  }
-  function nextGroup() {
-    store.nextGroup();
-  }
-  function exportData() {
-    exportJson(store.furnitureTree, store.connections);
-  }
+  function set(m)        { store.setMode(m); }
+  function next()        { store.nextStep(); }
+  function prev()        { store.prevStep(); }
+  function nextGroup()   { store.nextGroup(); }
+  function prevGroup()   { store.prevGroup(); }              // ★ 新增
+  function exportData()  { exportJson(store.furnitureTree, store.connections); }
   </script>
   
   <style scoped>
@@ -80,7 +79,7 @@
     color: #fff;
   }
   button:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: default;
   }
   </style>

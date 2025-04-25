@@ -23,9 +23,8 @@ export const useSceneStore = defineStore("scene", {
     }),
 
     getters: {
-        hasMoreGroup(state) {
-            return state.groupIdx >= 0 && state.groupIdx < state.groupPaths.length - 1;
-        }
+        hasMoreGroup: s => s.groupIdx >= 0 && s.groupIdx < s.groupPaths.length - 1,
+        hasPrevGroup: s => s.groupIdx > 0
     },
 
     actions: {
@@ -76,6 +75,12 @@ export const useSceneStore = defineStore("scene", {
         nextGroup() {
             if (!this.hasMoreGroup) return;
             this.groupIdx += 1;
+            this.currentNodePath = this.groupPaths[this.groupIdx];
+            this.threeCtx?.isolatePath(this.currentNodePath);
+        },
+        prevGroup() {
+            if (!this.hasPrevGroup) return;
+            this.groupIdx -= 1;
             this.currentNodePath = this.groupPaths[this.groupIdx];
             this.threeCtx?.isolatePath(this.currentNodePath);
         },
