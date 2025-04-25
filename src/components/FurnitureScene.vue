@@ -11,9 +11,12 @@
   const canvasEl = ref(null);
   
   onMounted(() => {
-    const ctx = createThreeContext(canvasEl.value, store.furnitureTree, (path) => {
-      store.currentNodePath = path;
-    });
+    const ctx = createThreeContext(
+      canvasEl.value,
+      store.furnitureTree,
+      store.connections,      // ← 传入当前连接数据
+      (path) => (store.currentNodePath = path)
+    );
     store.setThreeCtx(ctx);
   });
   </script>

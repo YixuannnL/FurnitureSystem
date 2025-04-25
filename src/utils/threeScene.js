@@ -6,12 +6,12 @@ import { dimsToBoxGeom } from "./geometryUtils";
 import { pastelColors } from "./colorPalette";
 
 /**
- * 创建 three.js 场景并返回控制 API
  * @param {HTMLCanvasElement} canvasEl
- * @param {Object} furnitureTree
- * @param {(path:string[])=>void} onSelect 回调：高亮对象后，把 path 告诉 Pinia
+ * @param {Object}           furnitureTree  解析后的树
+ * @param {Array}            connections    [{ partA : "", partB : "" }, ...]
+ * @param {Function}         onSelect(pathArray)
  */
-export function createThreeContext(canvasEl, furnitureTree, onSelect) {
+export function createThreeContext(canvasEl, furnitureTree, connections, onSelect) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf5f5f5).convertSRGBToLinear();
     const camera = new THREE.PerspectiveCamera(
@@ -44,6 +44,7 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
 
     // 从 tree 递归生成 mesh
     const meshMap = new Map(); // key: path.join('/')  value: mesh
+    const nameIndex = {};            // partName -> pathStr[]
     let colorIndex = 0;                        // 顺序取色
     function makeMaterial() {
         const hex = pastelColors[colorIndex++ % pastelColors.length];
@@ -83,15 +84,42 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
             mesh.add(edges);// 直接作为子物体挂在 mesh 上，跟随缩放/移动
 
             /****************************************************/
-
-            mesh.userData.path = node.path;
+            const pathStr = node.path.join("/");
+            mesh.userData = { pathArr: node.path, pathStr };
             group.add(mesh);
-            meshMap.set(node.path.join("/"), mesh);
+
+            meshMap.set(pathStr, mesh);
+            const shortName = node.path.at(-1);
+            (nameIndex[shortName] ??= []).push(pathStr);
         }
 
         node.children.forEach((child) => addNode(child, group));
     }
     addNode(furnitureTree, scene);
+
+    /* ------------------------- 建立连接图（无向） ----------------------------- */
+    let graph = new Map(); // pathStr -> Set<pathStr>
+    rebuildGraph(connections);
+
+    function rebuildGraph(conns) {
+        graph = new Map();
+        meshMap.forEach((_, k) => graph.set(k, new Set()));
+
+        conns.forEach((pair) => {
+            const [aName, bName] = Object.keys(pair);
+            const aPaths = nameIndex[aName] ?? [];
+            const bPaths = nameIndex[bName] ?? [];
+            aPaths.forEach((pa) =>
+                bPaths.forEach((pb) => {
+                    if (pa !== pb) {
+                        graph.get(pa).add(pb);
+                        graph.get(pb).add(pa);
+                    }
+                })
+            );
+        });
+    }
+
 
     // 选中辅助框
     const boxHelper = new THREE.BoxHelper();
@@ -105,6 +133,26 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
         orbit.enabled = !e.value;
     });
     scene.add(tc.getHelper());
+
+    let selectedMesh = null;          // 当前 TransformControls 绑在哪个 mesh
+    let component = [];               // 该 mesh 所在的连通分量 pathStr[]
+    let prevPos = new THREE.Vector3();
+
+    /** 根据连接图 BFS 求连通分量 */
+    function findComponent(rootPathStr) {
+        const result = [];
+        const visited = new Set();
+        const queue = [rootPathStr];
+        while (queue.length) {
+            const p = queue.shift();
+            if (visited.has(p)) continue;
+            visited.add(p);
+            result.push(p);
+            graph.get(p)?.forEach((n) => queue.push(n));
+        }
+        return result;
+    }
+
 
     /* ---------- 高亮逻辑 ---------- */
     function highlightPath(selectedPath = []) {
@@ -185,18 +233,37 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
 
     function selectMesh(mesh) {
         if (mesh) {
+            selectedMesh = mesh;
+            component = findComponent(mesh.userData.pathStr);
             boxHelper.setFromObject(mesh);
             boxHelper.visible = true;
             tc.attach(mesh);
+            prevPos.copy(mesh.position);
             highlightPath(mesh.userData.path);
             onSelect(mesh.userData.path);
         } else {
+            selectedMesh = null;
+            component = [];
             boxHelper.visible = false;
             tc.detach();
             highlightPath([]);            // 取消高亮放这里
             onSelect([]);
         }
     }
+
+    /** 拖动时把 delta 同步到同组件其他 mesh */
+    tc.addEventListener("objectChange", () => {
+        if (!selectedMesh || tc.mode !== "translate") return;
+        const delta = selectedMesh.position.clone().sub(prevPos);
+        if (delta.lengthSq() === 0) return;
+        prevPos.copy(selectedMesh.position);
+
+        component.forEach((p) => {
+            if (p === selectedMesh.userData.pathStr) return;
+            const m = meshMap.get(p);
+            if (m) m.position.add(delta);
+        });
+    });
 
     // 模式切换
     function setMode(mode) {
@@ -229,8 +296,14 @@ export function createThreeContext(canvasEl, furnitureTree, onSelect) {
         orbit,
         transformControls: tc,
         meshMap,
+
         setMode,
         highlightPath,  // 暴露给树面板调用
-        isolatePath     // 供 Pinia / TreeNode 调用
+        isolatePath,     // 供 Pinia / TreeNode 调用
+
+        /** 当连接数据变动时调用 */
+        updateConnections(newConns) {
+            rebuildGraph(newConns);
+        }
     };
 }

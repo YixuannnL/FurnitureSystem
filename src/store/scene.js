@@ -81,8 +81,11 @@ export const useSceneStore = defineStore("scene", {
         },
 
 
-        updateConnections(newConns) {
-            this.connections = newConns;
+        /** ---------- 连接编辑 ---------- */
+        updateConnections(arr) {
+            this.connections = arr;
+            // 通知 three.js 重新建立连接图
+            this.threeCtx?.updateConnections(arr);
         }
     }
 });
