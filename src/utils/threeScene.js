@@ -34,6 +34,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
     const finalBalls = [];   // 持久标记
     let previewBall = null;
+    let anchorAWorld = null;      // ★ 记录 meshA 选中的锚点（世界坐标）
 
     function ensurePreviewBall() {
         if (!previewBall) {
@@ -395,6 +396,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             if (best && bestDist <= CONNECT_TOL * CONNECT_TOL) {
                 const wp = meshA.localToWorld(best.clone());
                 placeFinalBall(wp);
+                anchorAWorld = wp.clone();
                 resetPreview();
                 highlightPath([]); // 取消高亮，进入选 Mesh B
                 connectState = 2;
@@ -433,6 +435,19 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 placeFinalBall(wp);
                 resetPreview();
 
+                /* ---------- 让 meshB 所在连通分量整体平移到 meshA ---------- */
+                if (anchorAWorld) {
+                    const anchorBWorld = wp.clone();
+                    const delta = anchorAWorld.clone().sub(anchorBWorld);
+
+                    /* 只移动 meshB “旧”连通分量（尚未加新边，因此不会包含 meshA） */
+                    const compB = findComponent(meshB.userData.pathStr);
+                    compB.forEach((pathStr) => {
+                        const m = meshMap.get(pathStr);
+                        if (m) m.position.add(delta);
+                    });
+                }
+
                 /* ---- 更新连接关系 ---- */
                 const n1 = meshA.userData.pathArr.at(-1);
                 const n2 = meshB.userData.pathArr.at(-1);
@@ -450,47 +465,84 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 }
                 /* 重置，准备下一次连接 */
                 resetConnectMode();
+                // Step 1 中连接完，立即重新排布当前子结构
+                if (store.step === 1 && store.currentNodePath.length) {
+                    layoutGroupLine(store.currentNodePath);
+                }
             }
         }
     }
 
-    // 先把 old 版本整段替换成 ↓ 新实现
     function layoutGroupLine(pathArr, margin = 50) {
         const prefix = pathArr.join("/");
 
-        // 1) 收集属于该子结构的所有 mesh
-        const meshes = [];
-        meshMap.forEach((mesh, key) => {
-            if (key.startsWith(prefix)) meshes.push(mesh);
-        });
-        if (!meshes.length) return;
+        /* ---------- 1. 先按连接图把属于该子结构的 mesh 聚成“连通分量” ---------- */
+        const clusters = [];
+        const visited = new Set();
 
-        // 固定顺序（名称字典序）
-        meshes.sort((a, b) =>
-            a.userData.pathStr.localeCompare(b.userData.pathStr)
-        );
+        meshMap.forEach((_, key) => {
+            if (!key.startsWith(prefix) || visited.has(key)) return;
 
-        // 2) 计算每个 mesh 沿 X 方向的实际宽度
-        const widths = meshes.map((m) => {
-            const box = new THREE.Box3().setFromObject(m);
-            return box.max.x - box.min.x;
-        });
-
-        // 3) 按“宽度 + margin”依次排开，并保证整体仍然居中
-        const totalLen =
-            widths.reduce((sum, w) => sum + w, 0) + margin * (meshes.length - 1);
-        let cursor = -totalLen * 0.5;
-        meshes.forEach((m, i) => {
-            const w = widths[i];
-            m.position.set(cursor + w * 0.5, 0, 0);
-            cursor += w + margin;
+            // BFS 找出一个组件
+            const comp = [];
+            const q = [key];
+            while (q.length) {
+                const p = q.shift();
+                if (visited.has(p)) continue;
+                visited.add(p);
+                comp.push(p);
+                graph.get(p)?.forEach((n) => {
+                    if (n.startsWith(prefix) && !visited.has(n)) q.push(n);
+                });
+            }
+            clusters.push(comp);
         });
 
-        // 4) 汇总所有 mesh 的包围盒，自动把相机/控制器对焦到它们
+        if (!clusters.length) return;
+
+        // 用首个 pathStr 做字典序排序，确保排布确定性
+        clusters.sort((a, b) => a[0].localeCompare(b[0]));
+
+        /* ---------- 2. 统计每个组件的包围盒 & 宽度 ---------- */
+        const boxes = [];
+        const widths = [];
+        clusters.forEach((paths) => {
+            const box = new THREE.Box3();
+            paths.forEach((p) => box.expandByObject(meshMap.get(p)));
+            boxes.push(box);
+            widths.push(box.max.x - box.min.x);
+        });
+
+        /* ---------- 3. 按“组件”水平排开（保持整体居中） ---------- */
+        const total = widths.reduce((s, w) => s + w, 0) + margin * (widths.length - 1);
+        let cursor = -total * 0.5;
+
+        clusters.forEach((paths, idx) => {
+            const box = boxes[idx];
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+
+            // 目标中心 X
+            const newCX = cursor + widths[idx] * 0.5;
+            const dx = newCX - center.x;
+
+            // 整组件整体平移 dx
+            paths.forEach((p) => {
+                const m = meshMap.get(p);
+                if (m) m.position.x += dx;
+            });
+
+            cursor += widths[idx] + margin;
+        });
+
+        /* ---------- 4. 相机一次性对焦所有组件 ---------- */
         const groupBox = new THREE.Box3();
-        meshes.forEach((m) => groupBox.expandByObject(m));
+        clusters.forEach((paths) =>
+            paths.forEach((p) => groupBox.expandByObject(meshMap.get(p)))
+        );
         focusCameraOnBox(groupBox);
     }
+
 
     /** 将相机和 OrbitControls 的 target 同时对准给定包围盒 */
     function focusCameraOnBox(box) {

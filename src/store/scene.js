@@ -134,6 +134,10 @@ export const useSceneStore = defineStore("scene", {
             this.connections = arr;
             // 通知 three.js 重新建立连接图
             this.threeCtx?.updateConnections(arr);
+            // 若在Step 1 保证排布实时刷新
+            if (this.step === 1 && this.currentNodePath.length) {
+                this.threeCtx?.layoutGroupLine(this.currentNodePath);
+            }
         }
     }
 });
