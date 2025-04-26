@@ -2,10 +2,13 @@
     <div class="panel">
       <h4>当前子结构：{{ groupName }}</h4>
   
-      <h5>内部部件 ({{ meshNames.length }})</h5>
-      <ul>
-        <li v-for="n in meshNames" :key="n">{{ n }}</li>
-      </ul>
+      <h5>内部部件 ({{ meshes.length }})</h5>
+<ul>
+  <li v-for="m in meshes" :key="m.pathStr">
+    {{ m.name }}
+    <button class="del" @click="delMesh(m.pathStr)">删除</button>
+  </li>
+ </ul>
   
       <h5 class="mt">内部连接 ({{ localConns.length }})</h5>
       <div
@@ -32,20 +35,30 @@
   import { computed, ref } from "vue";
   import { useSceneStore } from "../store";
   const store = useSceneStore();
+
+  function delMesh(p) {
+  store.deleteMesh(p);
+}
   
   const groupName = computed(() => store.currentNodePath.at(-1) ?? ""); // 最末节点名
   
-  /* 收集当前 group 内全部 leaf 名 */
-  const meshNames = computed(() => {
-    if (!store.threeCtx) return [];
-    const prefix = store.currentNodePath.join("/");
-    const list = [];
-    store.threeCtx.meshMap.forEach((_, path) => {
-      if (path.startsWith(prefix)) list.push(path.split("/").at(-1));
-    });
-    return list.sort();
+/** 收集当前 group 内全部 leaf（含唯一 pathStr） */
+const meshVer = computed(() => store.meshRevision);        // 依赖刷新
+const meshes = computed(() => {
+  meshVer.value;                                           // 触发
+  if (!store.threeCtx) return [];
+  const prefix = store.currentNodePath.join("/");
+  const arr = [];
+  store.threeCtx.meshMap.forEach((_, path) => {
+    if (path.startsWith(prefix)) {
+      arr.push({ name: path.split("/").at(-1), pathStr: path });
+    }
   });
+  return arr.sort((a, b) => a.name.localeCompare(b.name));
+});
   
+const meshNames = computed(() => meshes.value.map(m => m.name));
+
   const keys = (o) => Object.keys(o);
   const localConns = computed(() => {
     const set = new Set(meshNames.value);
@@ -121,5 +134,6 @@
   input {
     width: 90px;
   }
+  .del { margin-left: 6px; }
   </style>
   

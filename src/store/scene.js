@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import metaRaw from "../data/meta_data.json";
 import connRaw from "../data/conn_data.json";
-import { buildFurnitureTree, collectGroupsBottomUp } from "../utils/geometryUtils";
+import { buildFurnitureTree, collectGroupsBottomUp, removeNodeByPath } from "../utils/geometryUtils";
 
 export const useSceneStore = defineStore("scene", {
     state: () => ({
@@ -21,7 +21,8 @@ export const useSceneStore = defineStore("scene", {
         groupPaths: [],
         groupIdx: -1,
         /** ★ 记录已访问过的子结构，首次进入时用来触发“清空+排布” */
-        visitedGroups: new Set()
+        visitedGroups: new Set(),
+        meshRevision: 0,          // ← 新增：mesh 删除时自增
     }),
 
     getters: {
@@ -138,6 +139,33 @@ export const useSceneStore = defineStore("scene", {
             if (this.step === 1 && this.currentNodePath.length) {
                 this.threeCtx?.layoutGroupLine(this.currentNodePath);
             }
-        }
+        },
+
+
+        /** ---------- 删除单个 mesh ---------- */
+        deleteMesh(pathStr) {
+            // 1. three.js 场景侧
+            this.threeCtx?.removeMesh(pathStr);
+
+            // 2. 删除 furnitureTree 中对应节点
+            removeNodeByPath(this.furnitureTree, pathStr.split("/"));
+
+            // 3. 清理所有相关连接
+            const leafName = pathStr.split("/").at(-1);
+            const filtered = this.connections.filter(c => {
+                const ks = Object.keys(c);
+                return !ks.includes(leafName);
+            });
+            this.updateConnections(filtered);
+
+            // 4. 更新选中状态 & 步骤特有排布
+            if (this.currentNodePath.join("/") === pathStr) this.currentNodePath = [];
+            if (this.step === 1 && this.currentNodePath.length) {
+                this.threeCtx?.layoutGroupLine(this.currentNodePath);
+            }
+
+            // 5. 触发依赖刷新
+            this.meshRevision++;
+        },
     }
 });

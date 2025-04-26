@@ -133,3 +133,17 @@ export function collectGroupsBottomUp(root) {
     dfs(root);
     return result; // 已经是自底向上
 }
+
+
+/** 移除树中给定 pathArr 的节点（pathArr 至少含 1 层，根节点不可删） */
+export function removeNodeByPath(root, pathArr) {
+    if (!pathArr.length) return false;
+    const [head, ...rest] = pathArr;
+    const idx = root.children.findIndex(c => c.name === head);
+    if (idx === -1) return false;
+    if (rest.length === 0) {
+        root.children.splice(idx, 1);
+        return true;
+    }
+    return removeNodeByPath(root.children[idx], rest);
+}

@@ -543,7 +543,6 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         focusCameraOnBox(groupBox);
     }
 
-
     /** 将相机和 OrbitControls 的 target 同时对准给定包围盒 */
     function focusCameraOnBox(box) {
         const size = new THREE.Vector3();
@@ -569,6 +568,42 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         orbit.target.copy(center);
         orbit.update();
     }
+
+    /* -------- 删除 mesh ---------- */
+    function removeMesh(pathStr) {
+        const mesh = meshMap.get(pathStr);
+        if (!mesh) return;
+
+        // 若当前正选中，解除 TransformControls
+        if (mesh === selectedMesh) {
+            tc.detach();
+            selectedMesh = null;
+        }
+
+        // 移出场景并释放资源
+        mesh.parent?.remove(mesh);
+        mesh.traverse(o => {
+            if (o.geometry) o.geometry.dispose?.();
+            if (o.material) {
+                Array.isArray(o.material)
+                    ? o.material.forEach(m => m.dispose?.())
+                    : o.material.dispose?.();
+            }
+        });
+
+        // 更新索引
+        meshMap.delete(pathStr);
+        const short = pathStr.split("/").at(-1);
+        if (nameIndex[short]) {
+            nameIndex[short] = nameIndex[short].filter(p => p !== pathStr);
+            if (nameIndex[short].length === 0) delete nameIndex[short];
+        }
+
+        // 连通图删点
+        graph.delete(pathStr);
+        graph.forEach(set => set.delete(pathStr));
+    }
+
 
     function selectMesh(mesh) {
         if (nameLabel) { nameLabel.parent?.remove(nameLabel); nameLabel = null; }
@@ -685,6 +720,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         },
 
         layoutGroupLine,
-        resetConnectMode
+        resetConnectMode,
+        removeMesh
     };
 }
