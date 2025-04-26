@@ -454,19 +454,69 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         }
     }
 
-
-    /* ---------- 将一组 mesh 排成一行 ---------- */
-    function layoutGroupLine(pathArr, spacing = 200) {
+    // 先把 old 版本整段替换成 ↓ 新实现
+    function layoutGroupLine(pathArr, margin = 50) {
         const prefix = pathArr.join("/");
+
+        // 1) 收集属于该子结构的所有 mesh
         const meshes = [];
-        meshMap.forEach((m, k) => { if (k.startsWith(prefix)) meshes.push(m); });
+        meshMap.forEach((mesh, key) => {
+            if (key.startsWith(prefix)) meshes.push(mesh);
+        });
         if (!meshes.length) return;
 
-        meshes.sort((a, b) => a.userData.pathStr.localeCompare(b.userData.pathStr));
-        const start = -(meshes.length - 1) * spacing * 0.5;
-        meshes.forEach((m, i) => m.position.set(start + i * spacing, 0, 0));
+        // 固定顺序（名称字典序）
+        meshes.sort((a, b) =>
+            a.userData.pathStr.localeCompare(b.userData.pathStr)
+        );
+
+        // 2) 计算每个 mesh 沿 X 方向的实际宽度
+        const widths = meshes.map((m) => {
+            const box = new THREE.Box3().setFromObject(m);
+            return box.max.x - box.min.x;
+        });
+
+        // 3) 按“宽度 + margin”依次排开，并保证整体仍然居中
+        const totalLen =
+            widths.reduce((sum, w) => sum + w, 0) + margin * (meshes.length - 1);
+        let cursor = -totalLen * 0.5;
+        meshes.forEach((m, i) => {
+            const w = widths[i];
+            m.position.set(cursor + w * 0.5, 0, 0);
+            cursor += w + margin;
+        });
+
+        // 4) 汇总所有 mesh 的包围盒，自动把相机/控制器对焦到它们
+        const groupBox = new THREE.Box3();
+        meshes.forEach((m) => groupBox.expandByObject(m));
+        focusCameraOnBox(groupBox);
     }
 
+    /** 将相机和 OrbitControls 的 target 同时对准给定包围盒 */
+    function focusCameraOnBox(box) {
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+
+        // 取最大的边长估算距离，让包围盒恰好充满视野并留一点余量
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fovRad = THREE.MathUtils.degToRad(camera.fov);
+        const distance = maxDim * 0.65 / Math.tan(fovRad * 0.5);   // 0.65 ≈ 7 5 % 画面填充率
+
+        // 从右前上方 (1,1,1) 方向看过去，方向可随意
+        const dir = new THREE.Vector3(1, 1, 1).normalize();
+        camera.position.copy(center).addScaledVector(dir, distance);
+
+        // 更新相机裁剪面，避免近裁剪过近 / 远裁剪过远
+        camera.near = distance / 50;
+        camera.far = distance * 50;
+        camera.updateProjectionMatrix();
+
+        // 保证 OrbitControls 以新的中心为旋转/缩放基点
+        orbit.target.copy(center);
+        orbit.update();
+    }
 
     function selectMesh(mesh) {
         if (nameLabel) { nameLabel.parent?.remove(nameLabel); nameLabel = null; }
