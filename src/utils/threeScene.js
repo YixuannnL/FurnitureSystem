@@ -3,7 +3,8 @@ import * as THREE from "three";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { dimsToBoxGeom } from "./geometryUtils";
+import { dimsToBoxGeom, generateAnchorPoints } from "./geometryUtils";
+import { useSceneStore } from "../store";
 import { pastelColors } from "./colorPalette";
 
 /**
@@ -13,6 +14,56 @@ import { pastelColors } from "./colorPalette";
  * @param {Function}         onSelect(pathArray)
  */
 export function createThreeContext(canvasEl, furnitureTree, connections, onSelect) {
+
+    let currentMode = "drag";
+    /* ---------- 连接模式状态机 ---------- */
+    const store = useSceneStore();
+    const CONNECT_TOL = 25; // mm
+
+    let connectState = 0;   // 0 等 meshA, 1 anchorA, 2 meshB, 3 anchorB
+    let meshA = null,
+        meshB = null;
+
+    const ballGeom = new THREE.SphereGeometry(12, 16, 16);
+    const ballMatFinal = new THREE.MeshBasicMaterial({ color: 0xff5533 });
+    const ballMatPreview = new THREE.MeshBasicMaterial({
+        color: 0x00aaff,
+        transparent: true,
+        opacity: 0.6,
+    });
+
+    const finalBalls = [];   // 持久标记
+    let previewBall = null;
+
+    function ensurePreviewBall() {
+        if (!previewBall) {
+            previewBall = new THREE.Mesh(ballGeom, ballMatPreview);
+            scene.add(previewBall);
+        }
+        previewBall.visible = false;
+    }
+
+    function placeFinalBall(worldPos) {
+        const b = new THREE.Mesh(ballGeom, ballMatFinal);
+        b.position.copy(worldPos);
+        scene.add(b);
+        finalBalls.push(b);
+    }
+
+    function resetPreview() {
+        if (previewBall) previewBall.visible = false;
+    }
+
+    function resetConnectMode() {
+        connectState = 0;
+        meshA = meshB = null;
+        highlightPath([]);
+        resetPreview();
+        // 删除所有已放置的锚点球
+        finalBalls.forEach((b) => scene.remove(b));
+        finalBalls.length = 0;
+    }
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf5f5f5).convertSRGBToLinear();
     const camera = new THREE.PerspectiveCamera(
@@ -99,6 +150,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             /****************************************************/
             const pathStr = node.path.join("/");
             mesh.userData = { pathArr: node.path, path: node.path, pathStr };
+            /* 预生成锚点表（局部坐标） */
+            mesh.userData.anchors = generateAnchorPoints(node.dims, 50);
             group.add(mesh);
 
             meshMap.set(pathStr, mesh);
@@ -221,6 +274,10 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     function pointerDown(ev) {
         /* 若在手柄上按下，则完全交给 TransformControls 处理，阻断我们自己的选取逻辑 */
         if (isClickingGizmo()) return;
+        if (currentMode === "connect") {
+            handleConnectPointerDown(ev);
+            return;
+        }
         downX = ev.clientX;
         downY = ev.clientY;
 
@@ -249,9 +306,156 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         }
     }
 
-    renderer.domElement.addEventListener("pointerdown", pointerDown);
+    /* ---------------- PointerMove：连接模式预览 ---------------- */
+    function pointerMove(ev) {
+        if (currentMode !== "connect") return;
+        if (!(connectState === 1 || connectState === 3)) return;
 
-    /* ---------- 新增：将一组 mesh 排成一行 ---------- */
+        ensurePreviewBall();
+
+        const targetMesh = connectState === 1 ? meshA : meshB;
+        if (!targetMesh) return;
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const hit = raycaster.intersectObject(targetMesh, false);
+        if (!hit.length) {
+            previewBall.visible = false;
+            return;
+        }
+
+        const localHit = targetMesh.worldToLocal(hit[0].point.clone());
+        let best = null,
+            bestDist = Infinity;
+        targetMesh.userData.anchors.forEach((p) => {
+            const d = p.distanceToSquared(localHit);
+            if (d < bestDist) {
+                bestDist = d;
+                best = p;
+            }
+        });
+
+        if (best && bestDist <= CONNECT_TOL * CONNECT_TOL) {
+            const wp = targetMesh.localToWorld(best.clone());
+            previewBall.position.copy(wp);
+            previewBall.visible = true;
+        } else {
+            previewBall.visible = false;
+        }
+    }
+
+
+    renderer.domElement.addEventListener("pointerdown", pointerDown);
+    renderer.domElement.addEventListener("pointermove", pointerMove);
+
+    /* ---------- 连接模式点击（四步状态机） ---------- */
+    function handleConnectPointerDown(ev) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        /* —— 通用：如果已选过 A 或 B，但点击空白，重置整个连接流程 —— */
+        if ((connectState === 1 || connectState === 2 || connectState === 3)) {
+            // 判断任何物体都没被点击到
+            const anyHit = raycaster.intersectObjects([...meshMap.values()], false).length > 0;
+            if (!anyHit) {
+                resetConnectMode();
+                return;
+            }
+        }
+
+        /* —— Step 0：选择 Mesh A —— */
+        if (connectState === 0) {
+            const hits = raycaster.intersectObjects([...meshMap.values()], false);
+            if (!hits.length) return;
+            meshA = hits[0].object;
+            highlightPath(meshA.userData.pathArr);
+            connectState = 1;
+            return;
+        }
+
+        /* —— Step 1：在 Mesh A 上选锚点 —— */
+        if (connectState === 1) {
+            const hits = raycaster.intersectObject(meshA, false);
+            if (!hits.length) return;
+            const localHit = meshA.worldToLocal(hits[0].point.clone());
+            let best = null,
+                bestDist = Infinity;
+            meshA.userData.anchors.forEach((p) => {
+                const d = p.distanceToSquared(localHit);
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = p;
+                }
+            });
+            if (best && bestDist <= CONNECT_TOL * CONNECT_TOL) {
+                const wp = meshA.localToWorld(best.clone());
+                placeFinalBall(wp);
+                resetPreview();
+                highlightPath([]); // 取消高亮，进入选 Mesh B
+                connectState = 2;
+            }
+            return;
+        }
+
+        /* —— Step 2：选择 Mesh B —— */
+        if (connectState === 2) {
+            const hits = raycaster.intersectObjects([...meshMap.values()], false);
+            if (!hits.length) return;
+            const m = hits[0].object;
+            if (m === meshA) return; // 不允许同物体
+            meshB = m;
+            highlightPath(meshB.userData.pathArr);
+            connectState = 3;
+            return;
+        }
+
+        /* —— Step 3：在 Mesh B 上选锚点 —— */
+        if (connectState === 3) {
+            const hits = raycaster.intersectObject(meshB, false);
+            if (!hits.length) return;
+            const localHit = meshB.worldToLocal(hits[0].point.clone());
+            let best = null,
+                bestDist = Infinity;
+            meshB.userData.anchors.forEach((p) => {
+                const d = p.distanceToSquared(localHit);
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = p;
+                }
+            });
+            if (best && bestDist <= CONNECT_TOL * CONNECT_TOL) {
+                const wp = meshB.localToWorld(best.clone());
+                placeFinalBall(wp);
+                resetPreview();
+
+                /* ---- 更新连接关系 ---- */
+                const n1 = meshA.userData.pathArr.at(-1);
+                const n2 = meshB.userData.pathArr.at(-1);
+                if (n1 !== n2) {
+                    const exists = store.connections.some((c) => {
+                        const ks = Object.keys(c);
+                        return ks.includes(n1) && ks.includes(n2);
+                    });
+                    if (!exists) {
+                        store.updateConnections([
+                            ...store.connections,
+                            { [n1]: "", [n2]: "" },
+                        ]);
+                    }
+                }
+                /* 重置，准备下一次连接 */
+                resetConnectMode();
+            }
+        }
+    }
+
+
+    /* ---------- 将一组 mesh 排成一行 ---------- */
     function layoutGroupLine(pathArr, spacing = 200) {
         const prefix = pathArr.join("/");
         const meshes = [];
@@ -269,8 +473,6 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         if (mesh) {
             selectedMesh = mesh;
             component = findComponent(mesh.userData.pathStr);
-            // boxHelper.setFromObject(mesh);
-            // boxHelper.visible = true;
             tc.attach(mesh);
             /* 只有当 tc.enabled (drag / scale 模式) 时才 attach */
             if (tc.enabled) tc.attach(mesh);
@@ -319,6 +521,10 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
     // ------------------ 模式切换：唯一入口 ------------------
     function setMode(mode) {
+        /* 若从 connect 切到其他模式，先清理遗留状态 */
+        if (currentMode === "connect" && mode !== "connect") {
+            resetConnectMode();
+        }
         switch (mode) {
             case "drag":
                 tc.enabled = true;
@@ -335,11 +541,12 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 break;
 
             case "connect":
-            default:
+                resetConnectMode();
                 tc.detach();
                 tc.enabled = false;      // 完全禁用 gizmo，避免鼠标命中
                 break;
         }
+        currentMode = mode;
     }
 
     // 渲染循环
@@ -375,6 +582,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             rebuildGraph(newConns);
         },
 
-        layoutGroupLine
+        layoutGroupLine,
+        resetConnectMode
     };
 }

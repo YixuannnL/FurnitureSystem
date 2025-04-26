@@ -46,6 +46,83 @@ export function dimsToBoxGeom({ width, height, depth }) {
     return new THREE.BoxGeometry(width, height, depth);
 }
 
+/**
+ * 生成长方体可选锚点（局部坐标）：
+ *  - 8 顶点
+ *  - 12 棱中点
+ *  - 6 面中心
+ *  - 可选栅格点（gridStep > 0 时）
+ * 若只想要“吸附”效果，把距离阈值设得稍大即可（ThreeScene 里会做）。
+ */
+export function generateAnchorPoints(
+    { width: w, height: h, depth: d },
+    gridStep = 50
+) {
+    const hw = w / 2,
+        hh = h / 2,
+        hd = d / 2;
+    const pts = [];
+
+    /* 8 顶点 */
+    [-hw, hw].forEach((x) =>
+        [-hh, hh].forEach((y) =>
+            [-hd, hd].forEach((z) => pts.push(new THREE.Vector3(x, y, z)))
+        )
+    );
+
+    /* 12 棱中点 */
+    const addMid = (a, b) =>
+        pts.push(new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5));
+    for (let i = 0; i < 8; i++) {
+        const vx = i & 1 ? hw : -hw;
+        const vy = i & 2 ? hh : -hh;
+        const vz = i & 4 ? hd : -hd;
+        const v = new THREE.Vector3(vx, vy, vz);
+        if (vx < 0) addMid(v, v.clone().setX(-vx));
+        if (vy < 0) addMid(v, v.clone().setY(-vy));
+        if (vz < 0) addMid(v, v.clone().setZ(-vz));
+    }
+
+    /* 6 面中心 */
+    pts.push(
+        new THREE.Vector3(0, 0, hd),
+        new THREE.Vector3(0, 0, -hd),
+        new THREE.Vector3(0, hh, 0),
+        new THREE.Vector3(0, -hh, 0),
+        new THREE.Vector3(hw, 0, 0),
+        new THREE.Vector3(-hw, 0, 0)
+    );
+
+    /* 栅格点（可选）——在六个面上等距布点，便于“网格吸附” */
+    if (gridStep > 0) {
+        const axes = [
+            ["y", "z", hw, "x"],
+            ["y", "z", -hw, "x"],
+            ["x", "z", hh, "y"],
+            ["x", "z", -hh, "y"],
+            ["x", "y", hd, "z"],
+            ["x", "y", -hd, "z"],
+        ];
+        axes.forEach(([u, v, dConst, normal]) => {
+            const du = { x: w, y: h, z: d }[u];
+            const dv = { x: w, y: h, z: d }[v];
+            const nu = Math.floor(du / gridStep);
+            const nv = Math.floor(dv / gridStep);
+            for (let i = -nu; i <= nu; i++) {
+                for (let j = -nv; j <= nv; j++) {
+                    const p = new THREE.Vector3();
+                    p[u] = i * gridStep;
+                    p[v] = j * gridStep;
+                    p[normal] = dConst;
+                    pts.push(p);
+                }
+            }
+        });
+    }
+    return pts;
+}
+
+
 /** 取得所有非叶子 group 的 path（自底向上、左→右） */
 export function collectGroupsBottomUp(root) {
     const result = [];

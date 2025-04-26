@@ -45,6 +45,10 @@ export const useSceneStore = defineStore("scene", {
 
         /** ---------- 步骤切换 ---------- */
         goStep(n) {
+
+            // 切换任何步骤前，先清除残留的连接模式锚点
+            this.threeCtx?.resetConnectMode?.();
+
             if (n < 0 || n > 3 || n === this.step) return;
 
             /* 离开第 1 步：取消隔离 */

@@ -24,7 +24,21 @@
       canvasEl.value,
       store.furnitureTree,
       store.connections,      // ← 传入当前连接数据
-      (path) => (store.currentNodePath = path)
+            (path) => {
+        if (store.step === 1) {
+          if (path.length === 0) {
+            // 空白点击：恢复到当前子结构
+            const grp = store.groupPaths[store.groupIdx] || [];
+            store.currentNodePath = grp;
+            return;
+          }
+          // 点中了某个 mesh：切到它，但若它不属于当前 group，依然保留 group 层级
+          store.currentNodePath = path;
+          return;
+        }
+        // 非第 1 步：正常清空或切换
+        store.currentNodePath = path;
+      }
     );
     store.setThreeCtx(ctx);
   });
