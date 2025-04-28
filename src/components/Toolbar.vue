@@ -41,6 +41,7 @@ const allBtns = [
   { mode: "connect", label: "连接" },
   { mode: "planar",  label: "共面伸缩" },
   { mode: "axis",    label: "XYZ 伸缩" },
+  { mode: "numeric", label: "尺寸数值" },   
   { mode: "drag",    label: "拖动" }
 ];
 

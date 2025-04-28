@@ -721,6 +721,12 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 tc.detach();
                 tc.enabled = false;      // 完全禁用 gizmo，避免鼠标命中
                 break;
+
+            /* ======= 数值尺寸调整 ======= */
+            case "numeric":
+                tc.detach();             // 不出现 gizmo
+                tc.enabled = false;
+                break;
         }
         currentMode = mode;
     }

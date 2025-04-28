@@ -11,10 +11,13 @@
       </section>
 
       <aside class="right">
-        <GroupPanel        v-if="step === 1" />
-        <ConnectionPanel   v-else-if="step !== 3" />
-        <SizeAdjustPanel   v-else />
+        <!-- 数值尺寸模式优先 -->
+        <SizeAdjustPanel   v-if="mode === 'numeric'" />
+         <!-- 其它模式下：按步骤切换 -->
+        <GroupPanel        v-else-if="step === 1" />
+        <ConnectionPanel   v-else /> <!-- Step 0 / 2 / 3 均显示连接面板 -->
       </aside>
+
     </main>
     <footer><Toolbar /></footer>
   </div>
@@ -32,6 +35,7 @@ import GroupPanel from "./components/GroupPanel.vue";
 import { useSceneStore } from "./store";
 const store = useSceneStore();
 const step = computed(() => store.step);
+const mode = computed(() => store.mode);
 </script>
 
 <style scoped>
