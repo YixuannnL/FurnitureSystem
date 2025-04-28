@@ -50,3 +50,9 @@ npm run dev
     1. 自动配色	根据 path 哈希为每个 leaf-mesh 生成稳定且对比度足够的颜色；同一子结构色系相近，跨结构差异明显。	src/utils/colorUtils.js (新增) + src/utils/threeScene.js
     2. 描边线 (Edges)	为每个 mesh 再生成一层 EdgesGeometry＋LineSegments，在实体色块外勾勒轮廓，低配机器也能流畅。	src/utils/threeScene.js
     3. 名字标签 (可选)	使用 CSS2DRenderer 给所有叶子节点挂一枚可隐藏/显示的文字标签，默认显示；按 L 键可快速切换。	src/utils/threeScene.js
+
+
+重新定义“子结构” —— 取 最底层的非叶子 group（它的孩子全是叶节点/板件），我们称之为 Atomic Group。
+drawer_left / drawer_middle / … 属于 Atomic Group；
+sideboard_drawers 本身不是（因为它的孩子还是 group）。
+进入 step 2 时，收集所有 Atomic Group 的路径，然后调用 layoutPathsLine 把它们一字排开。

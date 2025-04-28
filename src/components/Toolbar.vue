@@ -28,7 +28,7 @@
   <script setup>
   import { computed } from "vue";
   import { useSceneStore } from "../store";
-  import { exportJson } from "../utils/exportUtils";
+  import { exportFinalJson } from "../utils/exportUtils";
   
   const store = useSceneStore();
   const mode = computed(() => store.mode);
@@ -53,8 +53,14 @@ const visibleBtns = computed(() =>
   function next()        { store.nextStep(); }
   function prev()        { store.prevStep(); }
   function nextGroup()   { store.nextGroup(); }
-  function prevGroup()   { store.prevGroup(); }              // ★ 新增
-  function exportData()  { exportJson(store.furnitureTree, store.connections); }
+  function prevGroup()   { store.prevGroup(); }              
+  function exportData()  {
+   exportFinalJson(
+     store.furnitureTree,          // 最新 meta
+     store.connections,            // 最新连接
+     store.threeCtx?.meshMap ?? new Map()   // three.js 中最终位姿
+   );
+ }
   </script>
   
   <style scoped>

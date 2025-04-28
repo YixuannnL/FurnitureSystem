@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import metaRaw from "../data/meta_data.json";
 import connRaw from "../data/conn_data.json";
-import { buildFurnitureTree, collectGroupsBottomUp, removeNodeByPath } from "../utils/geometryUtils";
+import { buildFurnitureTree, collectGroupsBottomUp, removeNodeByPath, collectAtomicGroups } from "../utils/geometryUtils";
 
 export const useSceneStore = defineStore("scene", {
     state: () => ({
@@ -66,6 +66,29 @@ export const useSceneStore = defineStore("scene", {
                 this.visitedGroups.clear();
                 this.currentNodePath = this.groupPaths[0] ?? [];
                 this.enterCurrentGroup();
+            }
+
+            /* ========== 进入 Step 2 ========== */
+            if (n === 2) {
+                /* 1. 取消隔离，显示所有物体 */
+                this.threeCtx?.isolatePath([]);
+                this.currentNodePath = [];
+
+                /* 2.收集所有 Atomic Group，并横向排布 */
+                const atomicPaths = collectAtomicGroups(this.furnitureTree);
+                this.threeCtx?.layoutPathsLine(atomicPaths);
+
+                /* 3. 默认切到连接模式，方便立即操作 */
+                this.setMode("connect");
+            }
+
+            /* ---------- 进入 Step-3 (完成) ---------- */
+            if (n === 3) {
+                /* 全部显示、取消高亮、保证可拖动但默认关闭 gizmo */
+                this.threeCtx?.isolatePath([]);
+                this.threeCtx?.highlightPath([]);
+                this.currentNodePath = [];
+                this.setMode("drag");           // 回到 drag，gizmo 可用
             }
 
             /* 回到 Step 0：强制设为 drag，防止残留的连接/伸缩手柄 */

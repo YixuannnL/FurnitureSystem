@@ -12,7 +12,8 @@
   </template>
   
   <script setup>
-  import { reactive, watch } from "vue";
+  import { reactive, watch, computed } from "vue";
+  import * as THREE from "three";
   import { useSceneStore } from "../store";
   import { findByPath } from "../utils/geometryUtils";
   import EmptyState from "./EmptyState.vue";

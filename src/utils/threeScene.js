@@ -543,6 +543,45 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         focusCameraOnBox(groupBox);
     }
 
+    /**
+  * 将任意若干 group（通过 pathArr 指定）按 X 轴一字排开
+  * @param {string[][]} pathsArr 形如 [['sideboard_frame'], ...]
+  * @param {number}     margin   组件之间留白
+  */
+    function layoutPathsLine(pathsArr, margin = 150) {
+        if (!pathsArr?.length) return;
+
+        /* 1. 计算每个子结构包围盒 & 宽度 */
+        const boxes = [], widths = [], groups = [];
+        pathsArr.forEach(pathArr => {
+            const group = scene.getObjectByName(pathArr.join("/"));
+            if (!group) return;
+            groups.push(group);
+            const box = new THREE.Box3().setFromObject(group);
+            boxes.push(box);
+            widths.push(box.max.x - box.min.x);
+        });
+        if (!boxes.length) return;
+
+        /* 2. 横向排布，保持整体居中 */
+        const total = widths.reduce((s, w) => s + w, 0) + margin * (widths.length - 1);
+        let cursor = -total * 0.5;
+
+        groups.forEach((g, idx) => {
+            const box = boxes[idx], center = new THREE.Vector3();
+            box.getCenter(center);
+            const newCx = cursor + widths[idx] * 0.5;
+            const dx = newCx - center.x;
+            g.position.x += dx;      // 整组平移
+            cursor += widths[idx] + margin;
+        });
+
+        /* 3. 相机对焦全部子结构 */
+        const allBox = new THREE.Box3();
+        boxes.forEach(b => allBox.expandByPoint(b.min).expandByPoint(b.max));
+        focusCameraOnBox(allBox);
+    }
+
     /** 将相机和 OrbitControls 的 target 同时对准给定包围盒 */
     function focusCameraOnBox(box) {
         const size = new THREE.Vector3();
@@ -720,6 +759,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         },
 
         layoutGroupLine,
+        layoutPathsLine,
         resetConnectMode,
         removeMesh
     };

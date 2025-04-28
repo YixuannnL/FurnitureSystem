@@ -147,3 +147,23 @@ export function removeNodeByPath(root, pathArr) {
     }
     return removeNodeByPath(root.children[idx], rest);
 }
+
+/** 收集所有“原子子结构”
+ *   定义：自身不是 leaf，但它的 children 都是 leaf（board）
+ *   返回值：path 数组列表
+ */
+export function collectAtomicGroups(root) {
+    const result = [];
+    function dfs(node) {
+        if (node.isLeaf) return;                 // 叶节点跳过
+        const hasGroupChild = node.children.some(c => !c.isLeaf);
+        if (!hasGroupChild) {
+            // 自己是最底层的非叶 group
+            if (node.path.length) result.push(node.path);
+        } else {
+            node.children.forEach(c => dfs(c)); // 继续向下找
+        }
+    }
+    dfs(root);
+    return result;
+}
