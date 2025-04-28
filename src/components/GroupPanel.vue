@@ -3,9 +3,8 @@
       <h4>当前子结构：{{ groupName }}</h4>
   
       <h5>内部部件 ({{ meshes.length }})</h5>
+
 <ul>
-
-
       <!-- ============== 新增部件 ============== -->
   <button class="add-mesh-btn" @click="showAdd = !showAdd">
     {{ showAdd ? '取消新增' : '新增部件' }}
@@ -36,10 +35,16 @@
     </div>
   </div>
 
-  <li v-for="m in meshes" :key="m.pathStr">
+    <li
+    v-for="m in meshes"
+    :key="m.pathStr"
+    :class="{ hsel: highlighted === m.pathStr }"
+    @click="toggleHighlight(m)"
+  >
     {{ m.name }}
-    <button class="del" @click="delMesh(m.pathStr)">删除</button>
+    <button class="del" @click.stop="delMesh(m.pathStr)">删除</button>
   </li>
+  
  </ul>
   
       <h5 class="mt">内部连接 ({{ localConns.length }})</h5>
@@ -132,6 +137,21 @@ const meshNames = computed(() => meshes.value.map(m => m.name));
     }
   }
 
+  /* ======== mesh 高亮逻辑 ======== */
+const highlighted = ref("");   // 记住高亮的 pathStr
+
+function toggleHighlight(m) {
+  // 如果已经高亮 → 取消
+  if (highlighted.value === m.pathStr) {
+    store.threeCtx?.highlightPath([]);
+    highlighted.value = "";
+    return;
+  }
+  // 否则高亮新的 mesh
+  store.threeCtx?.highlightPath(m.pathStr.split("/"));
+  highlighted.value = m.pathStr;
+}
+
 /* ========== 新增部件状态 & 方法 ========== */
 const showAdd  = ref(false);
 const addMode  = ref("copy");   // 'copy' | 'new'
@@ -188,6 +208,10 @@ function confirmAdd() {
     width: 90px;
   }
   .del { margin-left: 6px; }
+  /* -------- 高亮项样式 -------- */
+.hsel {
+  background: #f6facc;
+}
 
   .add-mesh-btn { margin-top: 6px; }
 .add-mesh-ui  { margin: 4px 0; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
