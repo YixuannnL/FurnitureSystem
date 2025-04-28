@@ -643,6 +643,45 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         graph.forEach(set => set.delete(pathStr));
     }
 
+    /* ====== 新增：向当前场景/索引里插入一个全新 leaf-mesh ====== */
+    function addMesh(pathArr, dims) {
+        const pathStr = pathArr.join("/");
+
+        // 1. 找到父级 THREE.Group（不存在就挂场景根）
+        const parentPath = pathArr.slice(0, -1).join("/");
+        const parentGrp = scene.getObjectByName(parentPath) || scene;
+
+        // 2. 生成几何、材质、mesh 及淡灰描边
+        const geom = dimsToBoxGeom(dims);
+        const mesh = new THREE.Mesh(geom, makeMaterial());
+        const edgeG = new THREE.EdgesGeometry(geom, 20);
+        const edgeM = new THREE.LineBasicMaterial({
+            color: new THREE.Color(0x555555).convertSRGBToLinear(),
+            transparent: true, opacity: 0.4
+        });
+        mesh.add(new THREE.LineSegments(edgeG, edgeM));
+
+        /* userData & 预生成锚点 */
+        mesh.userData = {
+            pathArr,
+            path: pathArr,
+            pathStr,
+            anchors: generateAnchorPoints(dims, 50)
+        };
+
+        // 3. 默认放到当前子结构几何中心
+        const box = new THREE.Box3().setFromObject(parentGrp);
+        box.getCenter(mesh.position);
+
+        parentGrp.add(mesh);
+
+        // 4. 更新各索引
+        meshMap.set(pathStr, mesh);
+        const short = pathArr.at(-1);
+        (nameIndex[short] ??= []).push(pathStr);
+        graph.set(pathStr, new Set());        // 初始无连接
+    }
+
 
     function selectMesh(mesh) {
         if (nameLabel) { nameLabel.parent?.remove(nameLabel); nameLabel = null; }
@@ -767,6 +806,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         layoutGroupLine,
         layoutPathsLine,
         resetConnectMode,
-        removeMesh
+        removeMesh,
+        addMesh
     };
 }

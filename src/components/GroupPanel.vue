@@ -4,6 +4,38 @@
   
       <h5>内部部件 ({{ meshes.length }})</h5>
 <ul>
+
+
+      <!-- ============== 新增部件 ============== -->
+  <button class="add-mesh-btn" @click="showAdd = !showAdd">
+    {{ showAdd ? '取消新增' : '新增部件' }}
+  </button>
+
+  <div v-if="showAdd" class="add-mesh-ui">
+    <label>
+      <select v-model="addMode">
+        <option value="copy">复制已有</option>
+        <option value="new">新建默认</option>
+      </select>
+    </label>
+
+    <!-- ---- 复制已有 ---- -->
+    <div v-if="addMode==='copy'" class="copy-ui">
+      <select v-model="copySrc">
+        <option disabled value="">选择源部件</option>
+        <option v-for="m in meshes" :value="m.pathStr" :key="m.pathStr">{{ m.name }}</option>
+      </select>
+      <input v-model="newName" placeholder="新名字"/>
+      <button @click="confirmAdd">确定</button>
+    </div>
+
+    <!-- ---- 新建默认 ---- -->
+    <div v-else class="new-ui">
+      <input v-model="newName" placeholder="新名字"/>
+      <button @click="confirmAdd">确定</button>
+    </div>
+  </div>
+
   <li v-for="m in meshes" :key="m.pathStr">
     {{ m.name }}
     <button class="del" @click="delMesh(m.pathStr)">删除</button>
@@ -99,6 +131,27 @@ const meshNames = computed(() => meshes.value.map(m => m.name));
       store.updateConnections(next);
     }
   }
+
+/* ========== 新增部件状态 & 方法 ========== */
+const showAdd  = ref(false);
+const addMode  = ref("copy");   // 'copy' | 'new'
+const copySrc  = ref("");
+const newName  = ref("");
+
+function confirmAdd() {
+  if (!newName.value.trim()) return;
+  if (addMode.value === "copy") {
+    if (!copySrc.value) return;
+    store.copyMesh(store.currentNodePath, copySrc.value, newName.value.trim());
+  } else {
+    store.createDefaultMesh(store.currentNodePath, newName.value.trim());
+  }
+  // 清空 UI
+  newName.value = "";
+  copySrc.value = "";
+  showAdd.value = false;
+}
+
   </script>
   
   <style scoped>
@@ -135,5 +188,9 @@ const meshNames = computed(() => meshes.value.map(m => m.name));
     width: 90px;
   }
   .del { margin-left: 6px; }
+
+  .add-mesh-btn { margin-top: 6px; }
+.add-mesh-ui  { margin: 4px 0; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.add-mesh-ui input, .add-mesh-ui select { width: 120px; }
   </style>
   

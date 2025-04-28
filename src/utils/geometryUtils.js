@@ -167,3 +167,11 @@ export function collectAtomicGroups(root) {
     dfs(root);
     return result;
 }
+
+/* ============ 新增：给定父 path，插入新的 leaf Node ============ */
+export function insertLeafUnderParent(root, parentPathArr, leafNode) {
+    const parent = findByPath(root, parentPathArr);
+    if (!parent || parent.isLeaf) return false;
+    parent.children.push(leafNode);
+    return true;
+}

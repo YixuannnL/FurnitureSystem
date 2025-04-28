@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import metaRaw from "../data/meta_data.json";
 import connRaw from "../data/conn_data.json";
-import { buildFurnitureTree, collectGroupsBottomUp, removeNodeByPath, collectAtomicGroups } from "../utils/geometryUtils";
+import { buildFurnitureTree, collectGroupsBottomUp, removeNodeByPath, collectAtomicGroups, findByPath, insertLeafUnderParent } from "../utils/geometryUtils";
 
 export const useSceneStore = defineStore("scene", {
     state: () => ({
@@ -190,5 +190,47 @@ export const useSceneStore = defineStore("scene", {
             // 5. 触发依赖刷新
             this.meshRevision++;
         },
+
+        /* =============== 新增：在当前子结构下添加部件 =============== */
+        addMesh(parentPath, name, dims) {
+            // 1. 同级重名校验
+            const parentNode = findByPath(this.furnitureTree, parentPath);
+            if (!parentNode || parentNode.children.some(c => c.name === name)) return;
+
+            const pathArr = [...parentPath, name];
+            const leaf = { name, type: "board", dims, path: pathArr, children: [], isLeaf: true };
+
+            // 2. 更新家具树
+            insertLeafUnderParent(this.furnitureTree, parentPath, leaf);
+
+            // 3. three.js 场景插入
+            this.threeCtx?.addMesh(pathArr, dims);
+
+            // 4. 触发依赖刷新 & 重新排布
+            this.meshRevision++;
+            if (this.step === 1) {
+                this.threeCtx?.layoutGroupLine(parentPath);
+            }
+        },
+
+        /* -------- (1) 复制已有 mesh -------- */
+        copyMesh(parentPath, srcPathStr, newName) {
+            const srcNode = findByPath(this.furnitureTree, srcPathStr.split("/"));
+            if (!srcNode || !srcNode.dims) return;
+            this.addMesh(parentPath, newName, { ...srcNode.dims });
+        },
+
+        /* -------- (2) 创建默认尺寸 mesh -------- */
+        createDefaultMesh(parentPath, newName) {
+            const parentNode = findByPath(this.furnitureTree, parentPath);
+            const base = parentNode?.dims ?? { width: 300, height: 300, depth: 300 };
+            const dims = {
+                width: base.width / 3,
+                height: base.height / 3,
+                depth: base.depth / 3
+            };
+            this.addMesh(parentPath, newName, dims);
+        }
+
     }
 });
