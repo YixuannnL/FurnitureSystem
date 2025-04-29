@@ -159,8 +159,12 @@ export const useSceneStore = defineStore("scene", {
             // 通知 three.js 重新建立连接图
             this.threeCtx?.updateConnections(arr);
             // 若在Step 1 保证排布实时刷新
+            // ★ 仅对子结构(非叶)排布
             if (this.step === 1 && this.currentNodePath.length) {
-                this.threeCtx?.layoutGroupLine(this.currentNodePath);
+                const node = findByPath(this.furnitureTree, this.currentNodePath);
+                if (node && !node.isLeaf) {
+                    this.threeCtx?.layoutGroupLine(this.currentNodePath);
+                }
             }
         },
 
@@ -184,7 +188,9 @@ export const useSceneStore = defineStore("scene", {
             // 4. 更新选中状态 & 步骤特有排布
             if (this.currentNodePath.join("/") === pathStr) this.currentNodePath = [];
             if (this.step === 1 && this.currentNodePath.length) {
-                this.threeCtx?.layoutGroupLine(this.currentNodePath);
+                const node = findByPath(this.furnitureTree, this.currentNodePath);
+                const grpPath = node?.isLeaf ? this.currentNodePath.slice(0, -1) : this.currentNodePath;
+                if (grpPath.length) this.threeCtx?.layoutGroupLine(grpPath);
             }
 
             // 5. 触发依赖刷新
@@ -209,7 +215,7 @@ export const useSceneStore = defineStore("scene", {
             // 4. 触发依赖刷新 & 重新排布
             this.meshRevision++;
             if (this.step === 1) {
-                this.threeCtx?.layoutGroupLine(parentPath);
+                this.threeCtx?.layoutGroupLine(parentPath);   // parent 一定是子结构
             }
         },
 

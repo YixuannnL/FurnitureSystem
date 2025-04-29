@@ -63,6 +63,9 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         // 删除所有已放置的锚点球
         finalBalls.forEach((b) => scene.remove(b));
         finalBalls.length = 0;
+
+        /* ★ 通知外部“已重置选取”——在 Step-1 会回到当前子结构 */
+        onSelect([]);
     }
 
     const scene = new THREE.Scene();
@@ -376,6 +379,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             meshA = hits[0].object;
             highlightPath(meshA.userData.pathArr);
             connectState = 1;
+            /* ★ 通知外部：当前选中 Mesh A */
+            onSelect(meshA.userData.pathArr);
             return;
         }
 
@@ -412,6 +417,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             if (m === meshA) return; // 不允许同物体
             meshB = m;
             highlightPath(meshB.userData.pathArr);
+            /* ★ 通知外部：当前选中 Mesh B */
+            onSelect(meshB.userData.pathArr);
             connectState = 3;
             return;
         }
