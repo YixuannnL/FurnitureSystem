@@ -24,28 +24,40 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     let meshA = null,
         meshB = null;
 
+    // ★★★ 新增：不同类别锚点的颜色
+    const ANCHOR_COLORS = {
+        corner: 0xff8800,  // 角
+        edge: 0xffc107,  // 棱
+        face: 0x4caf50,  // 面心
+        grid: 0x00aaff   // 网格点
+    };
+
     const ballGeom = new THREE.SphereGeometry(12, 16, 16);
     const ballMatFinal = new THREE.MeshBasicMaterial({ color: 0xff5533 });
-    const ballMatPreview = new THREE.MeshBasicMaterial({
-        color: 0x00aaff,
-        transparent: true,
-        opacity: 0.6,
-    });
+    // const ballMatPreview = new THREE.MeshBasicMaterial({
+    //     color: 0x00aaff,
+    //     transparent: true,
+    //     opacity: 0.6,
+    // });
+    const ballMatPreview = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.6 });
 
     const finalBalls = [];   // 持久标记
-    let previewBall = null;
+    // let previewBall = null;
+    let previewBall = null, previewType = "";
     let anchorAWorld = null;      // ★ 记录 meshA 选中的锚点（世界坐标）
 
     function ensurePreviewBall() {
         if (!previewBall) {
             previewBall = new THREE.Mesh(ballGeom, ballMatPreview);
+            previewBall.scale.set(1.5, 1.5, 1.5);
             scene.add(previewBall);
         }
         previewBall.visible = false;
     }
 
-    function placeFinalBall(worldPos) {
-        const b = new THREE.Mesh(ballGeom, ballMatFinal);
+    function placeFinalBall(worldPos, type) {
+        const mat = new THREE.MeshBasicMaterial({ color: ANCHOR_COLORS[type] });
+        const b = new THREE.Mesh(ballGeom, mat);
         b.position.copy(worldPos);
         scene.add(b);
         finalBalls.push(b);
@@ -98,6 +110,12 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     canvasEl.parentElement.appendChild(labelRenderer.domElement);
 
     let nameLabel = null;               // 当前 mesh 的名称标签
+    function removeNameLabel() {        // 统一清理标签
+        if (nameLabel) {
+            nameLabel.parent?.remove(nameLabel);
+            nameLabel = null;
+        }
+    }
 
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
@@ -249,6 +267,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 }
             });
         });
+        // 当 selectedPath 为空 ⇒ 没有任何高亮，隐藏名称标签
+        if (selectedPath.length === 0) removeNameLabel();
     }
 
 
@@ -258,11 +278,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         meshMap.forEach((mesh, key) => {
             mesh.visible = !t || key.startsWith(t);
         });
-        // // 选中框如失焦需隐藏
-        // if (boxHelper.visible && !boxHelper.object.visible) {
-        //     boxHelper.visible = false;
-        //     tc.detach();
-        // }
+        if (!pathArr.length) removeNameLabel();   // 退出隔离时顺带清掉
     }
 
 
@@ -274,6 +290,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         downY = 0;
 
     const CLICK_DIST = 6; // px² 阈值
+    let blankDownX = 0, blankDownY = 0;   // 仅在 connect 模式下的“空白鼠标按下”使用
 
     function pointerDown(ev) {
         /* 若在手柄上按下，则完全交给 TransformControls 处理，阻断我们自己的选取逻辑 */
@@ -332,20 +349,25 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         }
 
         const localHit = targetMesh.worldToLocal(hit[0].point.clone());
-        let best = null,
-            bestDist = Infinity;
-        targetMesh.userData.anchors.forEach((p) => {
-            const d = p.distanceToSquared(localHit);
+        // let best = null,
+        //     bestDist = Infinity;
+        // targetMesh.userData.anchors.forEach((p) => {
+        //     const d = p.distanceToSquared(localHit);
+        let best = null, bestDist = Infinity;
+        targetMesh.userData.anchors.forEach(({ pos, type }) => {
+            const d = pos.distanceToSquared(localHit);
             if (d < bestDist) {
                 bestDist = d;
-                best = p;
+                best = { pos, type };
             }
         });
 
         if (best && bestDist <= CONNECT_TOL * CONNECT_TOL) {
-            const wp = targetMesh.localToWorld(best.clone());
+            const wp = targetMesh.localToWorld(best.pos.clone());
+            previewBall.material.color.setHex(ANCHOR_COLORS[best.type]);
             previewBall.position.copy(wp);
             previewBall.visible = true;
+            previewType = best.type;
         } else {
             previewBall.visible = false;
         }
@@ -368,14 +390,37 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
 
-        /* —— 通用：如果已选过 A 或 B，但点击空白，重置整个连接流程 —— */
-        if ((connectState === 1 || connectState === 2 || connectState === 3)) {
-            // 判断任何物体都没被点击到
-            const anyHit = raycaster.intersectObjects(getVisibleMeshes(), false).length > 0;
-            if (!anyHit) {
-                resetConnectMode();
-                return;
+        // /* —— 通用：如果已选过 A 或 B，但点击空白，重置整个连接流程 —— */
+        // if ((connectState === 1 || connectState === 2 || connectState === 3)) {
+        //     // 判断任何物体都没被点击到
+        //     const anyHit = raycaster.intersectObjects(getVisibleMeshes(), false).length > 0;
+        //     if (!anyHit) {
+        //         resetConnectMode();
+        //         return;
+        //     }
+        // }
+
+        /* --------  A. 处理“空白处”点击 / 拖拽  -------- */
+        const anyMeshHit = raycaster.intersectObjects([...meshMap.values()], false).length > 0;
+        if (!anyMeshHit) {
+            // 已处于连接流程中 (state 1/2/3) 才考虑“撤销”
+            if (connectState !== 0) {
+                blankDownX = ev.clientX;
+                blankDownY = ev.clientY;
+                /* ↑ 不立即重置，等待 pointerup 判断是单击还是拖拽 */
+
+                window.addEventListener("pointerup", function blankUp(e) {
+                    const dx = e.clientX - blankDownX;
+                    const dy = e.clientY - blankDownY;
+                    if (dx * dx + dy * dy < CLICK_DIST * CLICK_DIST) {
+                        // 判定为“单击空白” → 重置连接
+                        resetConnectMode();
+                    }
+                    /* 移除一次性监听器 */
+                }, { once: true });
             }
+            // 即便 connectState === 0，也允许继续 OrbitControls 旋转
+            return;   // 不做后续 Mesh / Anchor 处理
         }
 
         /* —— Step 0：选择 Mesh A —— */
@@ -397,16 +442,16 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             const localHit = meshA.worldToLocal(hits[0].point.clone());
             let best = null,
                 bestDist = Infinity;
-            meshA.userData.anchors.forEach((p) => {
-                const d = p.distanceToSquared(localHit);
+            meshA.userData.anchors.forEach(({ pos, type }) => {
+                const d = pos.distanceToSquared(localHit);
                 if (d < bestDist) {
                     bestDist = d;
-                    best = p;
+                    best = { pos, type };
                 }
             });
             if (best && bestDist <= CONNECT_TOL * CONNECT_TOL) {
-                const wp = meshA.localToWorld(best.clone());
-                placeFinalBall(wp);
+                const wp = meshA.localToWorld(best.pos.clone());
+                placeFinalBall(wp, best.type);
                 anchorAWorld = wp.clone();
                 resetPreview();
                 highlightPath([]); // 取消高亮，进入选 Mesh B
@@ -436,16 +481,16 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             const localHit = meshB.worldToLocal(hits[0].point.clone());
             let best = null,
                 bestDist = Infinity;
-            meshB.userData.anchors.forEach((p) => {
-                const d = p.distanceToSquared(localHit);
+            meshB.userData.anchors.forEach(({ pos, type }) => {
+                const d = pos.distanceToSquared(localHit);
                 if (d < bestDist) {
                     bestDist = d;
-                    best = p;
+                    best = { pos, type };
                 }
             });
             if (best && bestDist <= CONNECT_TOL * CONNECT_TOL) {
-                const wp = meshB.localToWorld(best.clone());
-                placeFinalBall(wp);
+                const wp = meshB.localToWorld(best.pos.clone());
+                placeFinalBall(wp, best.type);
                 resetPreview();
 
                 /* ---------- 让 meshB 所在连通分量整体平移到 meshA ---------- */
@@ -630,6 +675,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         if (mesh === selectedMesh) {
             tc.detach();
             selectedMesh = null;
+            component = [];
+            removeNameLabel();
         }
 
         // 移出场景并释放资源
@@ -697,7 +744,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
 
     function selectMesh(mesh) {
-        if (nameLabel) { nameLabel.parent?.remove(nameLabel); nameLabel = null; }
+        // if (nameLabel) { nameLabel.parent?.remove(nameLabel); nameLabel = null; }
+        removeNameLabel();
         if (mesh) {
             selectedMesh = mesh;
             component = findComponent(mesh.userData.pathStr);
@@ -769,6 +817,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 break;
 
             case "connect":
+                selectMesh(null);
                 resetConnectMode();
                 tc.detach();
                 tc.enabled = false;      // 完全禁用 gizmo，避免鼠标命中

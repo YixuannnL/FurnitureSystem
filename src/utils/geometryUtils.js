@@ -58,21 +58,22 @@ export function generateAnchorPoints(
     { width: w, height: h, depth: d },
     gridStep = 50
 ) {
-    const hw = w / 2,
-        hh = h / 2,
-        hd = d / 2;
+    const hw = w / 2, hh = h / 2, hd = d / 2;
+    /** 统一推入 { pos:Vector3, type:string } */
     const pts = [];
+    const push = (v, type) => pts.push({ pos: v, type });
 
     /* 8 顶点 */
     [-hw, hw].forEach((x) =>
         [-hh, hh].forEach((y) =>
-            [-hd, hd].forEach((z) => pts.push(new THREE.Vector3(x, y, z)))
+            [-hd, hd].forEach(z => push(new THREE.Vector3(x, y, z), "corner"))
         )
     );
 
     /* 12 棱中点 */
     const addMid = (a, b) =>
-        pts.push(new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5));
+        push(new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5), "edge");
+
     for (let i = 0; i < 8; i++) {
         const vx = i & 1 ? hw : -hw;
         const vy = i & 2 ? hh : -hh;
@@ -84,14 +85,14 @@ export function generateAnchorPoints(
     }
 
     /* 6 面中心 */
-    pts.push(
+    [
         new THREE.Vector3(0, 0, hd),
         new THREE.Vector3(0, 0, -hd),
         new THREE.Vector3(0, hh, 0),
         new THREE.Vector3(0, -hh, 0),
         new THREE.Vector3(hw, 0, 0),
         new THREE.Vector3(-hw, 0, 0)
-    );
+    ].forEach(v => push(v, "face"));
 
     /* 栅格点（可选）——在六个面上等距布点，便于“网格吸附” */
     if (gridStep > 0) {
@@ -114,7 +115,7 @@ export function generateAnchorPoints(
                     p[u] = i * gridStep;
                     p[v] = j * gridStep;
                     p[normal] = dConst;
-                    pts.push(p);
+                    push(p, "grid");
                 }
             }
         });
