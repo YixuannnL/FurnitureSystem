@@ -291,7 +291,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
 
-        const hit = raycaster.intersectObjects([...meshMap.values()], false);
+        const hit = raycaster.intersectObjects(getVisibleMeshes(), false);
         if (hit.length) {
             selectMesh(hit[0].object);
             return; // 点到了 mesh，直接结束
@@ -351,6 +351,12 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         }
     }
 
+    /** 仅返回当前可见的 leaf-mesh 列表，供射线检测使用 */
+    function getVisibleMeshes() {
+        const arr = [];
+        meshMap.forEach(m => { if (m.visible) arr.push(m); });
+        return arr;
+    }
 
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("pointermove", pointerMove);
@@ -365,7 +371,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         /* —— 通用：如果已选过 A 或 B，但点击空白，重置整个连接流程 —— */
         if ((connectState === 1 || connectState === 2 || connectState === 3)) {
             // 判断任何物体都没被点击到
-            const anyHit = raycaster.intersectObjects([...meshMap.values()], false).length > 0;
+            const anyHit = raycaster.intersectObjects(getVisibleMeshes(), false).length > 0;
             if (!anyHit) {
                 resetConnectMode();
                 return;
@@ -374,7 +380,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
         /* —— Step 0：选择 Mesh A —— */
         if (connectState === 0) {
-            const hits = raycaster.intersectObjects([...meshMap.values()], false);
+            const hits = raycaster.intersectObjects(getVisibleMeshes(), false);
             if (!hits.length) return;
             meshA = hits[0].object;
             highlightPath(meshA.userData.pathArr);
@@ -411,7 +417,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
         /* —— Step 2：选择 Mesh B —— */
         if (connectState === 2) {
-            const hits = raycaster.intersectObjects([...meshMap.values()], false);
+            const hits = raycaster.intersectObjects(getVisibleMeshes(), false);
             if (!hits.length) return;
             const m = hits[0].object;
             if (m === meshA) return; // 不允许同物体
