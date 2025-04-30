@@ -109,13 +109,13 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     canvasEl.parentElement.style.position = "relative";
     canvasEl.parentElement.appendChild(labelRenderer.domElement);
 
-    let nameLabel = null;               // 当前 mesh 的名称标签
-    function removeNameLabel() {        // 统一清理标签
-        if (nameLabel) {
-            nameLabel.parent?.remove(nameLabel);
-            nameLabel = null;
-        }
-    }
+    // let nameLabel = null;               // 当前 mesh 的名称标签
+    // function removeNameLabel() {        // 统一清理标签
+    //     if (nameLabel) {
+    //         nameLabel.parent?.remove(nameLabel);
+    //         nameLabel = null;
+    //     }
+    // }
 
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
@@ -156,6 +156,25 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         if (node.isLeaf && node.dims) {
             const geom = dimsToBoxGeom(node.dims);
             const mesh = new THREE.Mesh(geom, makeMaterial());
+
+            /* ★ 为每个 mesh 做一个常驻名字标签 ------------------- */
+            const div = document.createElement("div");
+            div.className = "mesh-label";
+            div.textContent = node.path.at(-1);
+            /* 内联样式，免去全局 CSS */
+            Object.assign(div.style, {
+                padding: "2px 4px",
+                fontSize: "12px",
+                background: "rgba(255,255,255,0.8)",
+                borderRadius: "3px",
+                color: "#333"
+            });
+            const label = new CSS2DObject(div);
+            const h = node.dims?.height || 0;
+            label.position.set(0, h * 0.55 + 10, 0);
+            mesh.add(label);
+            /* 之后在高亮阶段会用到 */
+            mesh.userData.label = label;
 
             /* --------- NEW: 给每个 mesh 加可见边框线 --------- */
             const edgeGeom = new THREE.EdgesGeometry(geom, 20);
@@ -257,6 +276,13 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             mesh.material.opacity = isTarget ? 1 : 0.15;
             mesh.material.needsUpdate = true;
 
+            /* ① 当没有任何选中 (selectedPath.length===0) → 显示所有标签
+                ② 选中了某个/某组 → 只显示相关 label，其他隐藏             */
+            if (mesh.userData.label) {
+                mesh.userData.label.visible =
+                    selectedPath.length === 0 || isTarget;
+            }
+
             /* -------- 灰色边框线 -------- */
             mesh.children.forEach((child) => {
                 if (child.isLineSegments) {
@@ -268,7 +294,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             });
         });
         // 当 selectedPath 为空 ⇒ 没有任何高亮，隐藏名称标签
-        if (selectedPath.length === 0) removeNameLabel();
+        // if (selectedPath.length === 0) removeNameLabel();
     }
 
 
@@ -278,7 +304,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         meshMap.forEach((mesh, key) => {
             mesh.visible = !t || key.startsWith(t);
         });
-        if (!pathArr.length) removeNameLabel();   // 退出隔离时顺带清掉
+        // if (!pathArr.length) removeNameLabel();   // 退出隔离时顺带清掉
     }
 
 
@@ -676,7 +702,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             tc.detach();
             selectedMesh = null;
             component = [];
-            removeNameLabel();
+            // removeNameLabel();
         }
 
         // 移出场景并释放资源
@@ -745,7 +771,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
     function selectMesh(mesh) {
         // if (nameLabel) { nameLabel.parent?.remove(nameLabel); nameLabel = null; }
-        removeNameLabel();
+        // removeNameLabel();
         if (mesh) {
             selectedMesh = mesh;
             component = findComponent(mesh.userData.pathStr);
@@ -759,18 +785,18 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             onSelect(mesh.userData.pathArr);
 
             /* 在 mesh 上方挂文字标签 */
-            const div = document.createElement("div");
-            div.className = "mesh-name-label";
-            div.textContent = mesh.userData.pathArr.at(-1);
-            div.style.padding = "2px 4px";
-            div.style.fontSize = "12px";
-            div.style.background = "rgba(255,255,255,0.75)";
-            div.style.borderRadius = "3px";
-            div.style.color = "#333";
-            nameLabel = new CSS2DObject(div);
-            const { height = 0 } = mesh.geometry.parameters;
-            nameLabel.position.set(0, height * 0.55 + 10, 0);
-            mesh.add(nameLabel);
+            // const div = document.createElement("div");
+            // div.className = "mesh-name-label";
+            // div.textContent = mesh.userData.pathArr.at(-1);
+            // div.style.padding = "2px 4px";
+            // div.style.fontSize = "12px";
+            // div.style.background = "rgba(255,255,255,0.75)";
+            // div.style.borderRadius = "3px";
+            // div.style.color = "#333";
+            // // nameLabel = new CSS2DObject(div);
+            // const { height = 0 } = mesh.geometry.parameters;
+            // nameLabel.position.set(0, height * 0.55 + 10, 0);
+            // mesh.add(nameLabel);
         } else {
             selectedMesh = null;
             component = [];
