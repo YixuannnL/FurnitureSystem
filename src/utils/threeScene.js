@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { dimsToBoxGeom, generateAnchorPoints } from "./geometryUtils";
+import { dimsToBoxGeom, generateAnchorPoints, findByPath } from "./geometryUtils";
 import { useSceneStore } from "../store";
 import { pastelColors } from "./colorPalette";
 
@@ -23,6 +23,26 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     let connectState = 0;   // 0 等 meshA, 1 anchorA, 2 meshB, 3 anchorB
     let meshA = null,
         meshB = null;
+
+    /* ---------- 共面伸缩 (planar) ---------- */
+    let planarStage = 0;                      // 0→等待 A 面   1→等待 B 面
+    let planarMeshA = null;
+    let planarFaceNormalA = new THREE.Vector3();
+    let planarFaceCenterA = new THREE.Vector3();
+    let planarAxis = "";                      // 'x' | 'y' | 'z'
+
+    function resetPlanarMode(clearInfo = false) {
+        planarStage = 0;
+        planarMeshA = null;
+        planarFaceNormalA.set(0, 0, 0);
+        planarFaceCenterA.set(0, 0, 0);
+        planarAxis = "";
+        highlightPath([]);                    // 清高亮
+        /* 只有在“撤销 / 离开模式”时才清空面板 */
+        if (clearInfo) {
+            store.setPlanarInfo({ meshA: "", faceA: "", meshB: "", faceB: "" });
+        }
+    }
 
     // ★★★ 新增：不同类别锚点的颜色
     const ANCHOR_COLORS = {
@@ -45,6 +65,52 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     // let previewBall = null;
     let previewBall = null, previewType = "";
     let anchorAWorld = null;      // ★ 记录 meshA 选中的锚点（世界坐标）
+
+    /* ---------- 共面伸缩核心 ---------- */
+    function performPlanarResize(mesh, normalWorld, axis, deltaSigned) {
+        if (!mesh || !mesh.userData || !mesh.userData.pathArr) return; // 防御
+        // console.log
+        if (Math.abs(deltaSigned) < 1e-3) return;          // 改变太小，无视
+
+        /* ——— 1. 取出 / 更新 meta 尺寸 ——— */
+        const AXIS_MAP = { x: "width", y: "height", z: "depth" };
+        const dimKey = AXIS_MAP[axis];                  // 'width' | 'height' | 'depth'
+        if (!dimKey) return;
+
+        const pathArr = mesh.userData.pathArr;
+        const node = findByPath(store.furnitureTree, pathArr);
+        if (!node || !node.dims) return;
+
+        const newDims = { ...node.dims };
+        console.log("oldsize:", node.dims);
+        newDims[dimKey] += deltaSigned;                      // 新尺寸
+        if (newDims[axis] < 1) return;                    // 防止倒置/穿模
+        node.dims[dimKey] = newDims[dimKey];                     // 写回 meta
+        console.log("newsize:", newDims);
+        console.log("dimkey", dimKey);
+
+        /* ——— 2. 移动 mesh 使“对面”保持不变 ——— */
+        const shift = normalWorld.clone().setLength(deltaSigned / 2);
+        mesh.position.add(shift);
+
+        /* ——— 3. 替换几何 & 边框 & 锚点 ——— */
+        mesh.geometry.dispose();
+        mesh.geometry = dimsToBoxGeom(newDims);
+
+        mesh.children.forEach((c) => {
+            if (c.isLineSegments) {
+                c.geometry.dispose();
+                c.geometry = new THREE.EdgesGeometry(mesh.geometry, 20);
+            }
+        });
+        mesh.userData.anchors = generateAnchorPoints(newDims, 50);
+
+        /* ——— 4. 更新顶部 label 位置（若存在） ——— */
+        if (mesh.userData.label) {
+            const h = newDims.height || 0;
+            mesh.userData.label.position.set(0, h * 0.55 + 10, 0);
+        }
+    }
 
     function ensurePreviewBall() {
         if (!previewBall) {
@@ -181,6 +247,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         if (node.isLeaf && node.dims) {
             const geom = dimsToBoxGeom(node.dims);
             const mesh = new THREE.Mesh(geom, makeMaterial());
+            mesh.name = node.path.at(-1);
 
             /* ★ 为每个 mesh 做一个常驻名字标签 ------------------- */
             const div = document.createElement("div");
@@ -346,6 +413,11 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     function pointerDown(ev) {
         /* 若在手柄上按下，则完全交给 TransformControls 处理，阻断我们自己的选取逻辑 */
         if (isClickingGizmo()) return;
+        /* ============ 共面伸缩 ============ */
+        if (currentMode === "planar") {
+            handlePlanarPointerDown(ev);
+            return;
+        }
         if (currentMode === "connect") {
             handleConnectPointerDown(ev);
             return;
@@ -424,6 +496,80 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         }
     }
 
+    /* ---------- 共面伸缩点击 ---------- */
+    function handlePlanarPointerDown(ev) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        /* 仅与当前可见 mesh 相交 */
+        const hits = raycaster.intersectObjects(getVisibleMeshes(), false);
+        if (!hits.length) return;
+
+        const hit = hits[0];
+        let mesh = hit.object;
+        // 若击中的是子对象（边框线 / 标签），向上找到真正 leaf-mesh
+        while (mesh && (!mesh.userData || !mesh.userData.pathArr) && mesh.parent) {
+            mesh = mesh.parent;
+        }
+        if (!mesh.userData || !mesh.userData.pathArr) return;  // 仍拿不到就放弃
+
+        const nWorld = hit.face.normal.clone().transformDirection(mesh.matrixWorld).normalize();
+
+        /* 解析出主轴 & 方向 */
+        const axAbs = { x: Math.abs(nWorld.x), y: Math.abs(nWorld.y), z: Math.abs(nWorld.z) };
+        const axis = axAbs.x >= axAbs.y && axAbs.x >= axAbs.z ? "x" :
+            axAbs.y >= axAbs.z ? "y" : "z";
+
+        /* —— Stage-0：选 A 面 —— */
+        if (planarStage === 0) {
+            planarMeshA = mesh;
+            planarFaceNormalA.copy(nWorld);
+            planarFaceCenterA.copy(hit.point);
+            planarAxis = axis;
+            planarStage = 1;
+
+            const faceName = getFaceName(axis, nWorld[axis] >= 0);
+            store.setPlanarInfo({ meshA: mesh.userData.pathArr.at(-1), faceA: faceName, meshB: "", faceB: "" });
+
+            highlightPath(mesh.userData.pathArr);
+            onSelect(mesh.userData.pathArr);               // 通知 UI
+            return;
+        }
+
+        /* —— Stage-1：选 B 面 —— */
+        if (planarStage === 1) {
+            if (mesh === planarMeshA) return;              // 不能同一个 mesh            /* 法向需平行（正反皆可） */
+            if (axis !== planarAxis) return;
+            const dot = nWorld.dot(planarFaceNormalA);
+            if (Math.abs(dot) < 0.95) return;              // 不够平行
+
+            const deltaSigned = hit.point.clone()
+                .sub(planarFaceCenterA)
+                .dot(planarFaceNormalA);                   // 正负区分伸长/缩短
+
+            const faceNameB = getFaceName(axis, nWorld[axis] >= 0);
+            store.setPlanarInfo({
+                meshA: planarMeshA.userData.pathArr.at(-1),
+                faceA: getFaceName(planarAxis, planarFaceNormalA[planarAxis] >= 0),
+                meshB: mesh.userData.pathArr.at(-1),
+                faceB: faceNameB
+            });
+            console.log("planarMeshA, planarFaceNormalA, planarAxis, deltaSigned", planarMeshA.name, planarFaceNormalA, planarAxis, deltaSigned);
+            performPlanarResize(planarMeshA, planarFaceNormalA, planarAxis, deltaSigned);
+
+            /* 完成后复位 */
+            resetPlanarMode();
+        }
+    }
+
+    function getFaceName(axis, positive) {
+        if (axis === "x") return positive ? "RightFace" : "LeftFace";
+        if (axis === "y") return positive ? "TopFace" : "BottomFace";
+        return positive ? "FrontFace" : "BackFace";   // z
+    }
+
     /** 仅返回当前可见的 leaf-mesh 列表，供射线检测使用 */
     function getVisibleMeshes() {
         const arr = [];
@@ -455,7 +601,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                     const dy = e.clientY - blankDownY;
                     if (dx * dx + dy * dy < CLICK_DIST * CLICK_DIST) {
                         // 判定为“单击空白” → 重置连接
-                        resetConnectMode();
+                        resetConnectMode(true);
                     }
                     /* 移除一次性监听器 */
                 }, { once: true });
@@ -758,6 +904,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         // 2. 生成几何、材质、mesh 及淡灰描边
         const geom = dimsToBoxGeom(dims);
         const mesh = new THREE.Mesh(geom, makeMaterial());
+        mesh.name = pathArr.at(-1);
         const edgeG = new THREE.EdgesGeometry(geom, 20);
         const edgeM = new THREE.LineBasicMaterial({
             color: new THREE.Color(0x555555).convertSRGBToLinear(),
@@ -845,6 +992,9 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         if (currentMode === "connect" && mode !== "connect") {
             resetConnectMode();
         }
+        if (currentMode === "planar" && mode !== "planar") {
+            resetPlanarMode(true);  // 离开模式 → 清空面板
+        }
         switch (mode) {
             case "drag":
                 tc.enabled = true;
@@ -854,6 +1004,11 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 break;
 
             case "planar":
+                tc.detach();
+                tc.enabled = false;      // gizmo 全关
+                selectMesh(null);        // 清掉选中
+                resetPlanarMode();
+                break;
             case "axis":
                 tc.enabled = true;
                 tc.setMode("scale");     // 伸缩共用 scale

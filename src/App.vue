@@ -29,6 +29,8 @@
       <aside class="right" :style="{ width: rightWidth + 'px' }">
         <!-- 数值尺寸模式优先 -->
         <SizeAdjustPanel   v-if="mode === 'numeric'" />
+        <!-- 共面伸缩模式 -->
+        <PlanarPanel       v-else-if="mode === 'planar'" />
         <!-- Step-1：根据是否叶子决定面板 -->
         <template v-else-if="step === 1">
         <MeshPanel  v-if="isLeaf" />
@@ -53,6 +55,7 @@ import SizeAdjustPanel from "./components/SizeAdjustPanel.vue";
 import Toolbar from "./components/Toolbar.vue";
 import GroupPanel from "./components/GroupPanel.vue";
 import MeshPanel from './components/MeshPanel.vue';
+import PlanarPanel from './components/PlanarPanel.vue';
 import { findByPath } from './utils/geometryUtils';
 import { useSceneStore } from "./store";
 

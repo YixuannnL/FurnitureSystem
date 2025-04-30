@@ -23,6 +23,13 @@ export const useSceneStore = defineStore("scene", {
         /** ★ 记录已访问过的子结构，首次进入时用来触发“清空+排布” */
         visitedGroups: new Set(),
         meshRevision: 0,          // ← 新增：mesh 删除时自增
+        /* —— 共面伸缩实时信息 —— */
+        planarInfo: {
+            meshA: "",    // A 名
+            faceA: "",    // A 面
+            meshB: "",    // B 名
+            faceB: ""     // B 面
+        },
     }),
 
     getters: {
@@ -31,6 +38,12 @@ export const useSceneStore = defineStore("scene", {
     },
 
     actions: {
+
+        /* -------- 实时写入共面伸缩面板信息 -------- */
+        setPlanarInfo(info) {
+            this.planarInfo = info;
+        },
+
         setThreeCtx(ctx) {
             this.threeCtx = ctx;
             // 如果此刻正处于 group 隔离状态，需要立刻应用
