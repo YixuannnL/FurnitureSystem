@@ -128,6 +128,31 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     dirLight.position.set(300, 600, 500);
     scene.add(dirLight);
 
+    /* ---------- 全局坐标系箭头 ---------- */
+    // 箭头长度取家具整体最大尺寸的 60%，缺省 1000 mm
+    const rootDims = furnitureTree.dims ?? { width: 1000, height: 1000, depth: 1000 };
+    const arrowLen = Math.max(rootDims.width, rootDims.height, rootDims.depth) * 0.6;
+    const headLen = arrowLen * 0.1;    // 箭头头部为长度的 10%
+    const headWd = headLen * 0.6;     // 箭头宽度略小于头长
+
+    // X 轴 (红)
+    const xDir = new THREE.Vector3(1, 0, 0);
+    const xArrow = new THREE.ArrowHelper(xDir, new THREE.Vector3(0, 0, 0), arrowLen, 0xff0000, headLen, headWd);
+    xArrow.renderOrder = 1000;
+    scene.add(xArrow);
+
+    // Y 轴 (绿)
+    const yDir = new THREE.Vector3(0, 1, 0);
+    const yArrow = new THREE.ArrowHelper(yDir, new THREE.Vector3(0, 0, 0), arrowLen, 0x00ff00, headLen, headWd);
+    yArrow.renderOrder = 1000;
+    scene.add(yArrow);
+
+    // Z 轴 (蓝)
+    const zDir = new THREE.Vector3(0, 0, 1);
+    const zArrow = new THREE.ArrowHelper(zDir, new THREE.Vector3(0, 0, 0), arrowLen, 0x0000ff, headLen, headWd);
+    zArrow.renderOrder = 1000;
+    scene.add(zArrow);
+
     // 从 tree 递归生成 mesh
     const meshMap = new Map(); // key: path.join('/')  value: mesh
     const nameIndex = {};            // partName -> pathStr[]
