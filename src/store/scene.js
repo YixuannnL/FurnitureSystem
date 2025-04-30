@@ -163,7 +163,8 @@ export const useSceneStore = defineStore("scene", {
             if (this.step === 1 && this.currentNodePath.length) {
                 const node = findByPath(this.furnitureTree, this.currentNodePath);
                 if (node && !node.isLeaf) {
-                    this.threeCtx?.layoutGroupLine(this.currentNodePath);
+                    // 只排布，不对焦
+                    this.threeCtx?.layoutGroupLine(this.currentNodePath, 50, false);
                 }
             }
         },

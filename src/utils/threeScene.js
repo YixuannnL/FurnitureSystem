@@ -416,16 +416,6 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
 
-        // /* —— 通用：如果已选过 A 或 B，但点击空白，重置整个连接流程 —— */
-        // if ((connectState === 1 || connectState === 2 || connectState === 3)) {
-        //     // 判断任何物体都没被点击到
-        //     const anyHit = raycaster.intersectObjects(getVisibleMeshes(), false).length > 0;
-        //     if (!anyHit) {
-        //         resetConnectMode();
-        //         return;
-        //     }
-        // }
-
         /* --------  A. 处理“空白处”点击 / 拖拽  -------- */
         const anyMeshHit = raycaster.intersectObjects([...meshMap.values()], false).length > 0;
         if (!anyMeshHit) {
@@ -551,13 +541,14 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 resetConnectMode();
                 // Step 1 中连接完，立即重新排布当前子结构
                 if (store.step === 1 && store.currentNodePath.length) {
-                    layoutGroupLine(store.currentNodePath);
+                    // 第 1 步只想重新排布，不要动相机
+                    layoutGroupLine(store.currentNodePath, 50, false);
                 }
             }
         }
     }
 
-    function layoutGroupLine(pathArr, margin = 50) {
+    function layoutGroupLine(pathArr, margin = 50, focusCamera = true) {
         const prefix = pathArr.join("/");
 
         /* ---------- 1. 先按连接图把属于该子结构的 mesh 聚成“连通分量” ---------- */
@@ -620,11 +611,13 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         });
 
         /* ---------- 4. 相机一次性对焦所有组件 ---------- */
-        const groupBox = new THREE.Box3();
-        clusters.forEach((paths) =>
-            paths.forEach((p) => groupBox.expandByObject(meshMap.get(p)))
-        );
-        focusCameraOnBox(groupBox);
+        if (focusCamera) {
+            const groupBox = new THREE.Box3();
+            clusters.forEach((paths) =>
+                paths.forEach((p) => groupBox.expandByObject(meshMap.get(p)))
+            );
+            focusCameraOnBox(groupBox);
+        }
     }
 
     /**
