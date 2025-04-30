@@ -138,30 +138,41 @@ export const useSceneStore = defineStore("scene", {
             this.firstVisitGroup(this.currentNodePath);   // ★
         },
 
-        /** ---------- 首次进入子结构：清空内部连接并排布 ---------- */
+        /** ---------- 首次进入子结构：视情况清空内部连接并排布 ---------- */
         firstVisitGroup(pathArr) {
             const key = pathArr.join("/");
             if (this.visitedGroups.has(key)) return;
 
-            /* 1) 取出该组内部全部 leaf 名 */
-            const leafNames = [];
-            this.threeCtx?.meshMap.forEach((_, k) => {
-                if (k.startsWith(key)) leafNames.push(k.split("/").at(-1));
-            });
-            const nameSet = new Set(leafNames);
+            const node = findByPath(this.furnitureTree, pathArr);
+            const isAtomic =
+                node && !node.isLeaf &&
+                node.children.every(c => c.isLeaf);
 
-            /* 2) 过滤掉内部连接 */
-            const newConns = this.connections.filter(c => {
-                const [a, b] = Object.keys(c);
-                return !(nameSet.has(a) && nameSet.has(b));
-            });
-            if (newConns.length !== this.connections.length) {
-                this.updateConnections(newConns);
+
+            /* ---------- Step-1：Atomic 组才拆连接 ---------- */
+            if (isAtomic) {
+                console.log("node:", node.name);
+                /* 1) 收集该组里 **所有** leaf-node 的名字集合 */
+                const namesInGroup = new Set();
+                this.threeCtx?.meshMap.forEach((_, pathStr) => {
+                    if (pathStr.startsWith(key)) {
+                        namesInGroup.add(pathStr.split("/").at(-1));
+                    }
+                });
+
+                /* 2) 删除 “两端都在 namesInGroup” 的旧连接 */
+                const filtered = this.connections.filter(c => {
+                    const [a, b] = Object.keys(c);
+                    return !(namesInGroup.has(a) && namesInGroup.has(b));
+                });
+
+                if (filtered.length !== this.connections.length) {
+                    this.updateConnections(filtered);
+                }
             }
 
-            /* 3) 将内部 mesh 一字排开 */
+            /* 无论是否 atomic，都要排布子结构 */
             this.threeCtx?.layoutGroupLine(pathArr);
-
             this.visitedGroups.add(key);
         },
 

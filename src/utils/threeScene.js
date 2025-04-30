@@ -300,6 +300,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     let graph = new Map(); // pathStr -> Set<pathStr>
     rebuildGraph(connections);
 
+    /* ---------- 重新构建无向连接图（避免“重名板件”跨组串联） ---------- */
     function rebuildGraph(conns) {
         graph = new Map();
         meshMap.forEach((_, k) => graph.set(k, new Set()));
@@ -308,14 +309,31 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
             const [aName, bName] = Object.keys(pair);
             const aPaths = nameIndex[aName] ?? [];
             const bPaths = nameIndex[bName] ?? [];
-            aPaths.forEach((pa) =>
+
+            if (!aPaths.length || !bPaths.length) return;
+
+            /* —— 两端都是唯一 —— */
+            if (aPaths.length === 1 && bPaths.length === 1) {
+                const pa = aPaths[0], pb = bPaths[0];
+                if (pa !== pb) {
+                    graph.get(pa).add(pb);
+                    graph.get(pb).add(pa);
+                }
+                return;
+            }
+
+            /* —— 出现重名：只连“同父级路径”的板件 —— */
+            aPaths.forEach((pa) => {
+                const parentA = pa.substring(0, pa.lastIndexOf("/"));
                 bPaths.forEach((pb) => {
-                    if (pa !== pb) {
+                    if (pa === pb) return;
+                    const parentB = pb.substring(0, pb.lastIndexOf("/"));
+                    if (parentA === parentB) {
                         graph.get(pa).add(pb);
                         graph.get(pb).add(pa);
                     }
-                })
-            );
+                });
+            });
         });
     }
 
