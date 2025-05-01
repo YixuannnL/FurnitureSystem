@@ -41,115 +41,102 @@ export const useSceneStore = defineStore("scene", {
         hasPrevGroup: s => s.groupIdx > 0,
         /* ---------- 当前子结构相关文本句子 ---------- */
         currentDescSentences(state) {
-            // 仅 Step-1 时需要；其他步骤返回空
+            /* 只在 Step-1 显示描述 */
             if (state.step !== 1) return [];
 
-            /* —— 1. 取“正在浏览的子结构路径” ——  
-               groupIdx 会在 next/prevGroup 时更新，  
-               即便选中了 leaf 也保持用 groupPath。 */
+            /* —— 当前子结构根路径 —— */
             const grpPath =
-                state.groupIdx >= 0
-                    ? state.groupPaths[state.groupIdx]
-                    : state.currentNodePath;
+                state.groupIdx >= 0 ? state.groupPaths[state.groupIdx] : state.currentNodePath;
             if (!grpPath?.length) return [];
 
             const node = findByPath(state.furnitureTree, grpPath);
             if (!node) return [];
 
-            /** 2. 关键词短语 = ①子结构名 + ②其 **直接叶子** 名 */
-            const phrases = [];
-            const toPhrase = (str) => str.toLowerCase().replace(/_/g, " ");
-            phrases.push(toPhrase(node.name));
-            node.children
-                .filter((c) => c.isLeaf)
-                .forEach((c) => phrases.push(toPhrase(c.name)));
+            /* ---------- 工具与常量 ---------- */
+            const toTokens = (str) =>
+                str
+                    .toLowerCase()
+                    .replace(/_/g, " ")      // _ → space
+                    .split(/\s+/)
+                    .filter((t) => t && !/^\d+$/.test(t)); // 去纯数字 token
 
-            /** 3. phrase → 正则（整短语匹配，末尾允许复数 s） */
-            // const regs = phrases.map((ph) => {
-            //     const words = ph.split(" ");
-            //     const last = words.pop();
-            //     // optional 's' for plural on last word
-            //     const pattern =
-            //         "\\b" + [...words, last + "s?"].join("\\s+") + "\\b";
-            //     return new RegExp(pattern, "i");
-            // });
+            const DIR = new Set(["left", "right", "top", "bottom", "front", "back"]);
+            const GENERIC = new Set(["panel", "panels"]); // 过宽词
+            const DRAWER_WORDS = new Set(["drawer", "drawers"]);
 
-            /** 3. 方向词集合 */
-            const DIR = new Set([
-                "left",
-                "right",
-                "top",
-                "bottom",
-                "front",
-                "back",
-            ]);
+            /* 不规则复数映射（可按需扩充） */
+            const IRREG = { shelf: "shelves" };
 
-            /** 4.  phrase → 若干正则：
-            a) 原始短语
-            b) 去掉所有方向词      
-            方向词去除后可能过于宽泛（如仅剩 “panel”）导致误匹配 的问题，
-            规定去方向词后的短语必须 ≥ 2 个单词 才被接受；                        */
-            const regStrSet = new Set();
-
-            const phraseToRegex = (ph) => {
-                const words = ph.trim().split(/\s+/);
-                if (!words.length) return "";
-                const last = words[words.length - 1];
-                const core = [...words.slice(0, -1), last + "s?"].join("\\s+");
-                return "\\b" + core + "\\b";
+            /* 把 token 数组转成 regex，末词支持复数 */
+            const tokensToRegex = (tokens) => {
+                if (!tokens.length) return "";
+                const last = tokens[tokens.length - 1];
+                let lastPat;
+                if (IRREG[last]) {
+                    lastPat = `(?:${last}|${IRREG[last]})`;          // shelf / shelves
+                } else {
+                    lastPat = `${last}s?`;                           // 常规可选 s
+                }
+                const seq = [...tokens.slice(0, -1), lastPat].join("\\s+");
+                return `\\b${seq}\\b`;
             };
 
-            phrases.forEach((ph) => {
-                // a) 原始
-                regStrSet.add(phraseToRegex(ph));
-                const strippedWords = ph
-                    .split(" ")
-                    .filter((w) => !DIR.has(w));
+            /* ---------- 1) 收集关键词短语 ---------- */
+            const phrases = [];
 
-                const wordCount = strippedWords.length;
-                if (wordCount === 0 || wordCount === ph.split(" ").length) return; // 无变化
+            /* a. 子结构自身名称 */
+            phrases.push(toTokens(node.name));
 
-                if (wordCount >= 2) {
-                    // ≥2 个词 —— 始终保留
-                    regStrSet.add(phraseToRegex(strippedWords.join(" ")));
+            /* b. 递归收集 **所有后代** 叶子名称 */
+            (function collectLeafTokens(n) {
+                if (n.isLeaf) {
+                    phrases.push(toTokens(n.name));
+                    return;
+                }
+                n.children.forEach(collectLeafTokens);
+            })(node);
+
+            /* ---------- 2) 生成正则集合 ---------- */
+            const regStrSet = new Set();
+
+            phrases.forEach((tk) => {
+                if (!tk.length) return;
+
+                /* -- 原始短语 -- */
+                regStrSet.add(tokensToRegex(tk));
+
+                /* -- 去掉方向词后 (若有变化) -- */
+                const noDir = tk.filter((w) => !DIR.has(w));
+                if (noDir.length === tk.length || noDir.length === 0) return;
+
+                if (noDir.length >= 2) {
+                    regStrSet.add(tokensToRegex(noDir));
                 } else {
-                    // 只剩 1 个词 —— 根据具体词决定
-                    const single = strippedWords[0];
-                    const GENERIC = new Set(["panel", "panels"]); // 可扩展
-                    const DRAWER_WORDS = new Set(["drawer", "drawers"]);
-                    // if (!GENERIC.has(single)) {
-                    //     regStrSet.add(phraseToRegex(single));
-                    // }
+                    /* 只剩 1 单词时额外判定：拒绝过宽 & drawer 特殊 */
+                    const single = noDir[0];
                     if (!GENERIC.has(single) && !DRAWER_WORDS.has(single)) {
-                        // 其它正常词仍允许可选复数
-                        regStrSet.add(phraseToRegex(single));
+                        regStrSet.add(tokensToRegex(noDir));
                     }
                 }
             });
 
-            /* ---------- drawer(s) 单复数专匹配 ---------- */
-            const tokens = node.name
-                .toLowerCase()
-                .split(/[^a-zA-Z]+/)      // 以非字母分割
-                .filter(Boolean);
-
-            if (tokens.includes("drawers")) {
-                regStrSet.add("\\bdrawers\\b");          // 只复数
-            } else if (tokens.includes("drawer")) {
-                regStrSet.add("\\bdrawer\\b(?!s)");      // 只单数
+            /* ---------- 3) drawer / drawers 专用严格匹配 ---------- */
+            const nameTokens = toTokens(node.name);
+            if (nameTokens.includes("drawers")) {
+                regStrSet.add("\\bdrawers\\b");               // 只复数
+            } else if (nameTokens.includes("drawer")) {
+                regStrSet.add("\\bdrawer\\b(?!s)");           // 只单数
             }
 
             const regs = [...regStrSet].map((s) => new RegExp(s, "i"));
 
-            /** ---------- 5. 分句并匹配筛选 ---------- */
+            /* ---------- 4) 分句并筛选 ---------- */
             const sentences = state.descriptionText
                 .split(/(?<=[.!?])\s+/)
                 .map((s) => s.trim())
                 .filter(Boolean);
 
-            return sentences.filter((sen) =>
-                regs.some((re) => re.test(sen))
-            );
+            return sentences.filter((sen) => regs.some((re) => re.test(sen)));
         },
     },
 
