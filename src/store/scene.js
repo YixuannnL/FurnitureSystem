@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import metaRaw from "../data/meta_data.json";
 import connRaw from "../data/conn_data.json";
+import desc from "../data/description.txt?raw";
 import { buildFurnitureTree, collectGroupsBottomUp, removeNodeByPath, collectAtomicGroups, findByPath, insertLeafUnderParent } from "../utils/geometryUtils";
 
 export const useSceneStore = defineStore("scene", {
@@ -30,14 +31,134 @@ export const useSceneStore = defineStore("scene", {
             meshB: "",    // B 名
             faceB: ""     // B 面
         },
+        /* ======== 新增：描述文本 & 显示开关 ======== */
+        descriptionText: desc,
+        showDescription: true,
     }),
 
     getters: {
         hasMoreGroup: s => s.groupIdx >= 0 && s.groupIdx < s.groupPaths.length - 1,
-        hasPrevGroup: s => s.groupIdx > 0
+        hasPrevGroup: s => s.groupIdx > 0,
+        /* ---------- 当前子结构相关文本句子 ---------- */
+        currentDescSentences(state) {
+            // 仅 Step-1 时需要；其他步骤返回空
+            if (state.step !== 1) return [];
+
+            /* —— 1. 取“正在浏览的子结构路径” ——  
+               groupIdx 会在 next/prevGroup 时更新，  
+               即便选中了 leaf 也保持用 groupPath。 */
+            const grpPath =
+                state.groupIdx >= 0
+                    ? state.groupPaths[state.groupIdx]
+                    : state.currentNodePath;
+            if (!grpPath?.length) return [];
+
+            const node = findByPath(state.furnitureTree, grpPath);
+            if (!node) return [];
+
+            /** 2. 关键词短语 = ①子结构名 + ②其 **直接叶子** 名 */
+            const phrases = [];
+            const toPhrase = (str) => str.toLowerCase().replace(/_/g, " ");
+            phrases.push(toPhrase(node.name));
+            node.children
+                .filter((c) => c.isLeaf)
+                .forEach((c) => phrases.push(toPhrase(c.name)));
+
+            /** 3. phrase → 正则（整短语匹配，末尾允许复数 s） */
+            // const regs = phrases.map((ph) => {
+            //     const words = ph.split(" ");
+            //     const last = words.pop();
+            //     // optional 's' for plural on last word
+            //     const pattern =
+            //         "\\b" + [...words, last + "s?"].join("\\s+") + "\\b";
+            //     return new RegExp(pattern, "i");
+            // });
+
+            /** 3. 方向词集合 */
+            const DIR = new Set([
+                "left",
+                "right",
+                "top",
+                "bottom",
+                "front",
+                "back",
+            ]);
+
+            /** 4.  phrase → 若干正则：
+            a) 原始短语
+            b) 去掉所有方向词      
+            方向词去除后可能过于宽泛（如仅剩 “panel”）导致误匹配 的问题，
+            规定去方向词后的短语必须 ≥ 2 个单词 才被接受；                        */
+            const regStrSet = new Set();
+
+            const phraseToRegex = (ph) => {
+                const words = ph.trim().split(/\s+/);
+                if (!words.length) return "";
+                const last = words[words.length - 1];
+                const core = [...words.slice(0, -1), last + "s?"].join("\\s+");
+                return "\\b" + core + "\\b";
+            };
+
+            phrases.forEach((ph) => {
+                // a) 原始
+                regStrSet.add(phraseToRegex(ph));
+                const strippedWords = ph
+                    .split(" ")
+                    .filter((w) => !DIR.has(w));
+
+                const wordCount = strippedWords.length;
+                if (wordCount === 0 || wordCount === ph.split(" ").length) return; // 无变化
+
+                if (wordCount >= 2) {
+                    // ≥2 个词 —— 始终保留
+                    regStrSet.add(phraseToRegex(strippedWords.join(" ")));
+                } else {
+                    // 只剩 1 个词 —— 根据具体词决定
+                    const single = strippedWords[0];
+                    const GENERIC = new Set(["panel", "panels"]); // 可扩展
+                    const DRAWER_WORDS = new Set(["drawer", "drawers"]);
+                    // if (!GENERIC.has(single)) {
+                    //     regStrSet.add(phraseToRegex(single));
+                    // }
+                    if (!GENERIC.has(single) && !DRAWER_WORDS.has(single)) {
+                        // 其它正常词仍允许可选复数
+                        regStrSet.add(phraseToRegex(single));
+                    }
+                }
+            });
+
+            /* ---------- drawer(s) 单复数专匹配 ---------- */
+            const tokens = node.name
+                .toLowerCase()
+                .split(/[^a-zA-Z]+/)      // 以非字母分割
+                .filter(Boolean);
+
+            if (tokens.includes("drawers")) {
+                regStrSet.add("\\bdrawers\\b");          // 只复数
+            } else if (tokens.includes("drawer")) {
+                regStrSet.add("\\bdrawer\\b(?!s)");      // 只单数
+            }
+
+            const regs = [...regStrSet].map((s) => new RegExp(s, "i"));
+
+            /** ---------- 5. 分句并匹配筛选 ---------- */
+            const sentences = state.descriptionText
+                .split(/(?<=[.!?])\s+/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+
+            return sentences.filter((sen) =>
+                regs.some((re) => re.test(sen))
+            );
+        },
     },
 
     actions: {
+
+        /* ======= 新增：开关文字描述 ======= */
+        toggleDescription() {
+            this.showDescription = !this.showDescription;
+        },
 
         /* -------- 实时写入共面伸缩面板信息 -------- */
         setPlanarInfo(info) {

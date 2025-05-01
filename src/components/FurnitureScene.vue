@@ -1,8 +1,11 @@
 <template>
     <div class="scene-wrapper">
       <canvas ref="canvasEl" class="canvas"></canvas>
-      <!-- ★ Step 1 时显示当前子结构名称 -->
+      <!-- Step 1 时显示当前子结构名称 -->
       <div v-if="step === 1" class="group-label">{{ groupName }}</div>
+      
+      <!-- ★ 新增：文字描述浮层 -->
+      <DescriptionOverlay v-if="step === 1" />
     </div>
   </template>
   
@@ -10,6 +13,7 @@
   import { onMounted, ref, computed } from "vue";
   import { useSceneStore } from "../store";
   import { createThreeContext } from "../utils/threeScene";
+  import DescriptionOverlay from "./DescriptionOverlay.vue";
   
   const store = useSceneStore();
   const canvasEl = ref(null);
