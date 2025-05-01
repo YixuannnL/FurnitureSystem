@@ -27,10 +27,8 @@
 
       <!-- —— 右侧面板 —— -->
       <aside class="right" :style="{ width: rightWidth + 'px' }">
-        <!-- 数值尺寸模式优先 -->
-        <SizeAdjustPanel   v-if="mode === 'numeric'" />
         <!-- 共面伸缩模式 -->
-        <PlanarPanel       v-else-if="mode === 'planar'" />
+        <PlanarPanel       v-if="mode === 'planar'" />
         <!-- Step-1：根据是否叶子决定面板 -->
         <template v-else-if="step === 1">
         <MeshPanel  v-if="isLeaf" />
@@ -52,7 +50,6 @@ import StepperBar from "./components/StepperBar.vue";
 import PartTree from "./components/PartTree.vue";
 import FurnitureScene from "./components/FurnitureScene.vue";
 import ConnectionPanel from "./components/ConnectionPanel.vue";
-import SizeAdjustPanel from "./components/SizeAdjustPanel.vue";
 import Toolbar from "./components/Toolbar.vue";
 import GroupPanel from "./components/GroupPanel.vue";
 import MeshPanel from './components/MeshPanel.vue';
