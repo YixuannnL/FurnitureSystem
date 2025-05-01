@@ -1,8 +1,10 @@
+import * as THREE from "three";
 import { defineStore } from "pinia";
+import { UndoManager } from "../utils/undoManager.js";
 import metaRaw from "../data/meta_data.json";
 import connRaw from "../data/conn_data.json";
 import desc from "../data/description.txt?raw";
-import { buildFurnitureTree, collectGroupsBottomUp, removeNodeByPath, collectAtomicGroups, findByPath, insertLeafUnderParent } from "../utils/geometryUtils";
+import { buildFurnitureTree, collectGroupsBottomUp, removeNodeByPath, collectAtomicGroups, findByPath, insertLeafUnderParent, dimsToBoxGeom, generateAnchorPoints } from "../utils/geometryUtils";
 
 export const useSceneStore = defineStore("scene", {
     state: () => ({
@@ -24,6 +26,8 @@ export const useSceneStore = defineStore("scene", {
         /** ★ 记录已访问过的子结构，首次进入时用来触发“清空+排布” */
         visitedGroups: new Set(),
         meshRevision: 0,          // ← 新增：mesh 删除时自增
+        /* ---------- 撤销栈 ---------- */
+        undoMgr: new UndoManager(),
         /* —— 共面伸缩实时信息 —— */
         planarInfo: {
             meshA: "",    // A 名
@@ -149,6 +153,104 @@ export const useSceneStore = defineStore("scene", {
 
     actions: {
 
+        /* ===== 快照：仅 Step-1 / Step-2 记录 ===== */
+        recordSnapshot() {
+            if (!(this.step === 1 || this.step === 2)) return;
+            const snap = {
+                furnitureTree: JSON.parse(JSON.stringify(this.furnitureTree)),
+                connections: JSON.parse(JSON.stringify(this.connections)),
+                meshPositions: {}
+            };
+            if (this.threeCtx) {
+                this.threeCtx.meshMap.forEach((m, k) => {
+                    snap.meshPositions[k] = m.position.toArray();     // [x,y,z]
+                });
+            }
+            this.undoMgr.push(snap);
+        },
+
+        /* ===== 撤销 ===== */
+        undo() {
+            const snap = this.undoMgr.pop();
+            if (!snap) return;
+
+            /* 1. 恢复 meta / 连接 */
+            this.furnitureTree = snap.furnitureTree;
+            this.connections = snap.connections;
+
+            /* 2. three.js 场景同步 */
+            if (this.threeCtx) {
+                // a) 删除多余 mesh
+                this.threeCtx.meshMap.forEach((_, pathStr) => {
+                    if (!snap.meshPositions[pathStr]) {
+                        this.threeCtx.removeMesh(pathStr);
+                    }
+                });
+                // b) 还原缺失或位置
+                Object.entries(snap.meshPositions).forEach(([p, pos]) => {
+                    let mesh = this.threeCtx.meshMap.get(p);
+                    if (!mesh) {
+                        const node = findByPath(this.furnitureTree, p.split("/"));
+                        if (node && node.dims)
+                            this.threeCtx.addMesh(node.path, node.dims);
+                        mesh = this.threeCtx.meshMap.get(p);
+                    }
+                    mesh?.position.set(...pos);
+                });
+
+
+                /* 2-b 尺寸 / 几何 同步 */
+                this.threeCtx.meshMap.forEach((mesh, pathStr) => {
+                    const node = findByPath(this.furnitureTree, pathStr.split("/"));
+                    if (!node || !node.dims) return;
+
+                    /* 若几何已是最新尺寸则跳过 */
+                    const gp = mesh.geometry?.parameters;
+                    const same =
+                        gp &&
+                        Math.abs(gp.width - node.dims.width) < 1e-3 &&
+                        Math.abs(gp.height - node.dims.height) < 1e-3 &&
+                        Math.abs(gp.depth - node.dims.depth) < 1e-3;
+                    if (same) return;
+
+                    /* ——— 重建几何体 ——— */
+                    mesh.geometry.dispose();
+                    mesh.geometry = dimsToBoxGeom(node.dims);
+
+                    /* ——— 更新描边 ——— */
+                    mesh.children.forEach(c => {
+                        if (c.isLineSegments) {
+                            c.geometry.dispose();
+                            c.geometry = new THREE.EdgesGeometry(mesh.geometry, 20);
+                        }
+                    });
+
+                    /* ——— 重新生成锚点 ——— */
+                    mesh.userData.anchors = generateAnchorPoints(node.dims, 50);
+
+                    /* ——— 调整顶部文字标签高度 ——— */
+                    if (mesh.userData.label) {
+                        mesh.userData.label.position.set(
+                            0,
+                            node.dims.height * 0.55 + 10,
+                            0
+                        );
+                    }
+                });
+
+
+                // c) 重建连接图
+                this.threeCtx.updateConnections(this.connections);
+            }
+            /* 3. 通知依赖刷 UI */
+            this.meshRevision++;
+        },
+
+        /* ===== 在换子结构 / 切主步骤时清栈 ===== */
+        clearUndo() {
+            this.undoMgr.clear();
+        },
+
         /* ---------- 标记当前子结构已完成 ---------- */
         markCurrentGroupCompleted() {
             if (this.step !== 1 || this.groupIdx < 0 || !this.groupPaths.length) return;
@@ -181,7 +283,7 @@ export const useSceneStore = defineStore("scene", {
 
         /** ---------- 步骤切换 ---------- */
         goStep(n) {
-
+            this.clearUndo();
             // 切换任何步骤前，先清除残留的连接模式锚点
             this.threeCtx?.resetConnectMode?.();
 
@@ -245,6 +347,7 @@ export const useSceneStore = defineStore("scene", {
 
         /** ---------- 子结构遍历 ---------- */
         nextGroup() {
+            this.clearUndo();
             // if (!this.hasMoreGroup) return;
             // this.groupIdx += 1;
             if (!this.hasMoreGroup) return;
@@ -254,6 +357,7 @@ export const useSceneStore = defineStore("scene", {
             this.enterCurrentGroup();
         },
         prevGroup() {
+            this.clearUndo();
             if (!this.hasPrevGroup) return;
             this.groupIdx -= 1;
             this.enterCurrentGroup();
@@ -294,7 +398,7 @@ export const useSceneStore = defineStore("scene", {
                 });
 
                 if (filtered.length !== this.connections.length) {
-                    this.updateConnections(filtered);
+                    this.updateConnections(filtered, true);   // 不进撤销栈
                 }
             }
 
@@ -305,7 +409,9 @@ export const useSceneStore = defineStore("scene", {
 
 
         /** ---------- 连接编辑 ---------- */
-        updateConnections(arr) {
+        updateConnections(arr, skipUndo = false) {
+            // this.recordSnapshot();                 // ★ 先拍快照
+            if (!skipUndo) this.recordSnapshot();  // ★ 仅在需要时入栈
             this.connections = arr;
             // 通知 three.js 重新建立连接图
             this.threeCtx?.updateConnections(arr);
@@ -323,6 +429,7 @@ export const useSceneStore = defineStore("scene", {
 
         /** ---------- 删除单个 mesh ---------- */
         deleteMesh(pathStr) {
+            this.recordSnapshot();                 // 先拍快照
             // 1. three.js 场景侧
             this.threeCtx?.removeMesh(pathStr);
 
@@ -335,7 +442,7 @@ export const useSceneStore = defineStore("scene", {
                 const ks = Object.keys(c);
                 return !ks.includes(leafName);
             });
-            this.updateConnections(filtered);
+            this.updateConnections(filtered, true);   // deleteMesh 开头已拍过快照
 
             // 4. 更新选中状态 & 步骤特有排布
             if (this.currentNodePath.join("/") === pathStr) this.currentNodePath = [];
@@ -351,6 +458,7 @@ export const useSceneStore = defineStore("scene", {
 
         /* =============== 新增：在当前子结构下添加部件 =============== */
         addMesh(parentPath, name, dims) {
+            this.recordSnapshot();                 // 先拍快照
             // 1. 同级重名校验
             const parentNode = findByPath(this.furnitureTree, parentPath);
             if (!parentNode || parentNode.children.some(c => c.name === name)) return;
@@ -373,6 +481,7 @@ export const useSceneStore = defineStore("scene", {
 
         /* -------- (1) 复制已有 mesh -------- */
         copyMesh(parentPath, srcPathStr, newName) {
+            this.recordSnapshot();                 // 先拍快照
             const srcNode = findByPath(this.furnitureTree, srcPathStr.split("/"));
             if (!srcNode || !srcNode.dims) return;
             this.addMesh(parentPath, newName, { ...srcNode.dims });
@@ -380,6 +489,7 @@ export const useSceneStore = defineStore("scene", {
 
         /* -------- (2) 创建默认尺寸 mesh -------- */
         createDefaultMesh(parentPath, newName) {
+            this.recordSnapshot();                 // 先拍快照
             const parentNode = findByPath(this.furnitureTree, parentPath);
             const base = parentNode?.dims ?? { width: 300, height: 300, depth: 300 };
             const dims = {

@@ -47,6 +47,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'  
+import { onMounted, onUnmounted } from "vue";
 import StepperBar from "./components/StepperBar.vue";
 import PartTree from "./components/PartTree.vue";
 import FurnitureScene from "./components/FurnitureScene.vue";
@@ -105,6 +106,17 @@ function stopResize() {
   window.removeEventListener("mousemove", onMove);
   window.removeEventListener("mouseup", stopResize);
 }
+
+onMounted(() => {
+  const handler = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      store.undo();
+    }
+  };
+  window.addEventListener("keydown", handler);
+  onUnmounted(() => window.removeEventListener("keydown", handler));
+});
 
 </script>
 

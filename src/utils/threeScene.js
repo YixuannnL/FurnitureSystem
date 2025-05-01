@@ -74,6 +74,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
     /* ---------- 共面伸缩核心 ---------- */
     function performPlanarResize(mesh, normalWorld, axis, deltaSigned) {
+        store.recordSnapshot();
         if (!mesh || !mesh.userData || !mesh.userData.pathArr) return; // 防御
         // console.log
         if (Math.abs(deltaSigned) < 1e-3) return;          // 改变太小，无视
@@ -180,14 +181,6 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     // 让 <canvas> 包装容器成为定位上下文
     canvasEl.parentElement.style.position = "relative";
     canvasEl.parentElement.appendChild(labelRenderer.domElement);
-
-    // let nameLabel = null;               // 当前 mesh 的名称标签
-    // function removeNameLabel() {        // 统一清理标签
-    //     if (nameLabel) {
-    //         nameLabel.parent?.remove(nameLabel);
-    //         nameLabel = null;
-    //     }
-    // }
 
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
@@ -354,6 +347,73 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         orbit.enabled = !e.value;
     });
     scene.add(tc.getHelper());
+
+    let scalingOrigDims = null;     // 记录缩放开始时的尺寸
+    /* === 监听 TransformControls 缩放开始 === */
+    tc.addEventListener("mouseDown", () => {
+        if (!selectedMesh) return;
+
+        if (tc.mode === "scale") {
+            // 1) 先把当前状态压入撤销栈
+            store.recordSnapshot();
+
+            // 2) 保存原始尺寸，便于计算比例
+            const node = findByPath(store.furnitureTree, selectedMesh.userData.pathArr);
+            scalingOrigDims = node && node.dims ? { ...node.dims } : null;
+            return;
+        }
+
+        /* ---------- B) 拖动 (translate) ---------- */
+        if (tc.mode === "translate") {
+            store.recordSnapshot();                // ★ 只需这一步
+            /* 无需额外缓存数据，位置由快照恢复 */
+        }
+    });
+
+
+    /* === 缩放拖拽结束：dragging-changed value=false === */
+    tc.addEventListener("dragging-changed", (e) => {
+        if (!(tc.mode === "scale" && selectedMesh && scalingOrigDims)) return;
+        if (e.value) return;                 // true 表示开始拖拽；false 为结束
+
+        const node = findByPath(store.furnitureTree, selectedMesh.userData.pathArr);
+        if (!node || !node.dims) { scalingOrigDims = null; return; }
+
+        /* —— 1. 计算缩放后的新尺寸 —— */
+        const s = selectedMesh.scale;
+        const newDims = {
+            width: scalingOrigDims.width * s.x,
+            height: scalingOrigDims.height * s.y,
+            depth: scalingOrigDims.depth * s.z
+        };
+        node.dims = newDims;                // 写回 meta
+
+        /* —— 2. 重建几何体 / 边框 / 锚点 —— */
+        selectedMesh.geometry.dispose();
+        selectedMesh.geometry = dimsToBoxGeom(newDims);
+
+        selectedMesh.children.forEach(c => {
+            if (c.isLineSegments) {
+                c.geometry.dispose();
+                c.geometry = new THREE.EdgesGeometry(selectedMesh.geometry, 20);
+            }
+        });
+        selectedMesh.userData.anchors = generateAnchorPoints(newDims, 50);
+
+        /* —— 3. 更新顶部标签高度 —— */
+        if (selectedMesh.userData.label) {
+            selectedMesh.userData.label.position.set(0, newDims.height * 0.55 + 10, 0);
+        }
+
+        /* —— 4. 把 mesh.scale 复原为 1 —— */
+        selectedMesh.scale.set(1, 1, 1);
+
+        /* —— 5. 标记刷新 —— */
+        store.meshRevision++;
+
+        /* 清空临时尺寸缓存 */
+        scalingOrigDims = null;
+    });
 
     /* 用于判断“本次 pointerDown 是否点在 gizmo 轴上” */
     function isClickingGizmo() {
@@ -698,6 +758,9 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 placeFinalBall(wp, best.type);
                 resetPreview();
 
+                // === 连接前快照 ===
+                store.recordSnapshot();
+
                 /* ---------- 让 meshB 所在连通分量整体平移到 meshA ---------- */
                 if (anchorAWorld) {
                     const anchorBWorld = wp.clone();
@@ -736,10 +799,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                         return ks.includes(n1) && ks.includes(n2);
                     });
                     if (!exists) {
-                        store.updateConnections([
-                            ...store.connections,
-                            { [n1]: "", [n2]: "" },
-                        ]);
+                        store.updateConnections([...store.connections, { [n1]: "", [n2]: "" },], true);
                     }
                 }
                 /* 重置，准备下一次连接 */

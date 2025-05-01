@@ -31,6 +31,7 @@
     { immediate: true }
   );
   function apply() {
+    store.recordSnapshot();
     if (!dims.value) return;
     Object.assign(dims.value, localDims);
     // 更新对应 mesh 缩放
