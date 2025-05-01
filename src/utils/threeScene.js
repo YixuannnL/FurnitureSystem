@@ -701,11 +701,27 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
                 /* ---------- 让 meshB 所在连通分量整体平移到 meshA ---------- */
                 if (anchorAWorld) {
                     const anchorBWorld = wp.clone();
-                    const delta = anchorAWorld.clone().sub(anchorBWorld);
 
-                    /* 只移动 meshB “旧”连通分量（尚未加新边，因此不会包含 meshA） */
+                    /* 1 取两端各自连通分量 */
+                    const compA = findComponent(meshA.userData.pathStr);
                     const compB = findComponent(meshB.userData.pathStr);
-                    compB.forEach((pathStr) => {
+
+                    /* 2 选出要移动的那一侧（节点数更少者） */
+                    let movingComp, movingAnchorWorld, refAnchorWorld;
+                    if (compA.length <= compB.length) {
+                        movingComp = compA;            // 把 A 侧移到 B 侧
+                        movingAnchorWorld = anchorAWorld;
+                        refAnchorWorld = anchorBWorld;
+                    } else {
+                        movingComp = compB;            // 把 B 侧移到 A 侧
+                        movingAnchorWorld = anchorBWorld;
+                        refAnchorWorld = anchorAWorld;
+                    }
+
+                    /* 3 计算并应用平移 Δ */
+                    const delta = refAnchorWorld.clone().sub(movingAnchorWorld);
+
+                    movingComp.forEach(pathStr => {
                         const m = meshMap.get(pathStr);
                         if (m) m.position.add(delta);
                     });
