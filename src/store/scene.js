@@ -150,7 +150,7 @@ export const useSceneStore = defineStore("scene", {
 
 
             /* ---------- Step-1：Atomic 组才拆连接 ---------- */
-            if (isAtomic) {
+            if (isAtomic && !node.isAutoDrawer) {
                 console.log("node:", node.name);
                 /* 1) 收集该组里 **所有** leaf-node 的名字集合 */
                 const namesInGroup = new Set();

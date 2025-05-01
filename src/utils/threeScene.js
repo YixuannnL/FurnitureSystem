@@ -4,6 +4,7 @@ import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRe
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { dimsToBoxGeom, generateAnchorPoints, findByPath } from "./geometryUtils";
+import { assembleAllDrawers } from "./drawerUtils";
 import { useSceneStore } from "../store";
 import { pastelColors } from "./colorPalette";
 
@@ -16,6 +17,11 @@ import { pastelColors } from "./colorPalette";
 export function createThreeContext(canvasEl, furnitureTree, connections, onSelect) {
 
     let currentMode = "drag";
+
+    /* ——— 与选中 / 拖动相关的全局变量要最先声明 ——— */
+    let selectedMesh = null;          // 当前 TransformControls 绑定的 mesh
+    let component = [];            // 与 selectedMesh 同联通分量的 pathStr[]
+    let prevPos = new THREE.Vector3();
     /* ---------- 连接模式状态机 ---------- */
     const store = useSceneStore();
     const CONNECT_TOL = 25; // mm
@@ -298,6 +304,10 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
     /* ------------------------- 建立连接图（无向） ----------------------------- */
     let graph = new Map(); // pathStr -> Set<pathStr>
+
+    /* ---------- 抽屉自动组装 ---------- */
+    assembleAllDrawers(furnitureTree, meshMap, removeMesh);
+
     rebuildGraph(connections);
 
     /* ---------- 重新构建无向连接图（避免“重名板件”跨组串联） ---------- */
@@ -337,12 +347,6 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
         });
     }
 
-
-    // 选中辅助框
-    // const boxHelper = new THREE.BoxHelper();
-    // boxHelper.visible = false;
-    // scene.add(boxHelper);
-
     // TransformControls
     const tc = new TransformControls(camera, renderer.domElement);
     tc.setSpace("world");
@@ -355,10 +359,6 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     function isClickingGizmo() {
         return tc.enabled && tc.axis !== null;   // axis 在 TransformControls 内部 pointerDown 时已被赋值
     }
-
-    let selectedMesh = null;          // 当前 TransformControls 绑在哪个 mesh
-    let component = [];               // 该 mesh 所在的连通分量 pathStr[]
-    let prevPos = new THREE.Vector3();
 
     /** 根据连接图 BFS 求连通分量 */
     function findComponent(rootPathStr) {
