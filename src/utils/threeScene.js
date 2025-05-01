@@ -576,14 +576,46 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
 
     /* ---------- 共面伸缩点击 ---------- */
     function handlePlanarPointerDown(ev) {
+        // const rect = renderer.domElement.getBoundingClientRect();
+        // mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        // mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        // raycaster.setFromCamera(mouse, camera);
+
+        // /* 仅与当前可见 mesh 相交 */
+        // const hits = raycaster.intersectObjects(getVisibleMeshes(), false);
+        // if (!hits.length) return;
+
+        /* ——— 0. 光线投射 & 空白检测 ——— */
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
 
-        /* 仅与当前可见 mesh 相交 */
         const hits = raycaster.intersectObjects(getVisibleMeshes(), false);
-        if (!hits.length) return;
+
+        /* === 空白处：可能是“取消”也可能是旋转视角 === */
+        if (!hits.length) {
+            /* 仅当已经选完 mesh A，正等待 mesh B 时才有“取消”意义 */
+            if (planarStage === 1) {
+                const startX = ev.clientX;
+                const startY = ev.clientY;
+                const onUp = (e) => {
+                    window.removeEventListener("pointerup", onUp);
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
+                    const dist2 = dx * dx + dy * dy;
+                    /* 与连接模式相同的 CLICK_DIST 判定 */
+                    if (dist2 < CLICK_DIST * CLICK_DIST) {
+                        /* 单击空白 ——> 重置共面伸缩流程 */
+                        resetPlanarMode(true);     // 清理面板 & 高亮
+                        onSelect([]);              // 通知外部取消选中
+                    }
+                };
+                /* 等 pointerup 再决定是否真正重置 */
+                window.addEventListener("pointerup", onUp, { once: true });
+            }
+            return;   // 空白处：不再向下执行选面逻辑
+        }
 
         const hit = hits[0];
         let mesh = hit.object;
