@@ -35,7 +35,7 @@
   <style scoped>
   .desc-overlay {
     position: absolute;
-    top: 36px;                       /* 避开 group-label */
+    top: 110px;                       /* 避开 group-label 和 indicator */
     left: 50%;
     transform: translateX(-50%);
     max-width: 70%;

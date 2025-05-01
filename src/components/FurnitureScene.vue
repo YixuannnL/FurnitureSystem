@@ -3,8 +3,11 @@
       <canvas ref="canvasEl" class="canvas"></canvas>
       <!-- Step 1 时显示当前子结构名称 -->
       <div v-if="step === 1" class="group-label">{{ groupName }}</div>
+
+      <!-- 步骤指示条（所有步骤都会内部判断是否显示） -->
+      <StepIndicator />
       
-      <!-- ★ 新增：文字描述浮层 -->
+      <!-- 文字描述浮层 -->
       <DescriptionOverlay v-if="step === 1" />
     </div>
   </template>
@@ -14,6 +17,8 @@
   import { useSceneStore } from "../store";
   import { createThreeContext } from "../utils/threeScene";
   import DescriptionOverlay from "./DescriptionOverlay.vue";
+  import StepIndicator from "./StepIndicator.vue";
+
   
   const store = useSceneStore();
   const canvasEl = ref(null);
