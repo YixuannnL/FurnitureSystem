@@ -1,6 +1,6 @@
 <template>
     <div
-      :class="['node', { selected }]"
+      :class="['node', { selected, completed }]"
       @click.stop="selectNode"
       :style="{ paddingLeft: depth * 12 + 'px' }"
     >
@@ -9,6 +9,8 @@
       </span>
       <span v-else style="display:inline-block;width:14px"></span>
       {{ node.name }}
+      <!-- 已完成标记 -->
+      <span v-if="completed" class="check">✓</span>
     </div>
     <div v-show="open">
       <TreeNode
@@ -32,6 +34,11 @@
   
   const selected = computed(
     () => store.currentNodePath.join("/") === props.node.path.join("/")
+  );
+  
+  /* —— 是否已完成 —— */
+  const completed = computed(() =>
+    !props.node.isLeaf && store.isGroupCompleted(props.node.path)
   );
   
   function selectNode() {
@@ -58,6 +65,15 @@
   }
   .node.selected {
     background: #d8f3dc;
+  }
+  
+  /* —— 已完成视觉 —— */
+  .node.completed {
+    color: #42b983;          /* 整行文字变绿，也可以只改箭头 */
+  }
+  .check {
+    margin-left: 4px;
+    font-size: 12px;
   }
   </style>
   

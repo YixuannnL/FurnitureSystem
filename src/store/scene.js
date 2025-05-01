@@ -34,11 +34,18 @@ export const useSceneStore = defineStore("scene", {
         /* ======== 新增：描述文本 & 显示开关 ======== */
         descriptionText: desc,
         showDescription: true,
+        /** 已完成的子结构路径集合（路径用 "/" 拼成字符串）*/
+        completedGroups: new Set(),
     }),
 
     getters: {
         hasMoreGroup: s => s.groupIdx >= 0 && s.groupIdx < s.groupPaths.length - 1,
+
         hasPrevGroup: s => s.groupIdx > 0,
+
+        /** 判断某个 pathArr 是否已完成（供 TreeNode.vue 调用） */
+        isGroupCompleted: (s) => (pathArr) => s.completedGroups.has(pathArr.join("/")),
+
         /* ---------- 当前子结构相关文本句子 ---------- */
         currentDescSentences(state) {
             /* 只在 Step-1 显示描述 */
@@ -142,6 +149,13 @@ export const useSceneStore = defineStore("scene", {
 
     actions: {
 
+        /* ---------- 标记当前子结构已完成 ---------- */
+        markCurrentGroupCompleted() {
+            if (this.step !== 1 || this.groupIdx < 0 || !this.groupPaths.length) return;
+            const key = this.groupPaths[this.groupIdx].join("/");
+            this.completedGroups.add(key);
+        },
+
         /* ======= 新增：开关文字描述 ======= */
         toggleDescription() {
             this.showDescription = !this.showDescription;
@@ -175,6 +189,7 @@ export const useSceneStore = defineStore("scene", {
 
             /* 离开第 1 步：取消隔离 */
             if (this.step === 1 && n !== 1) {
+                this.markCurrentGroupCompleted();
                 this.threeCtx?.isolatePath([]);
                 this.groupPaths = [];
                 this.groupIdx = -1;
@@ -230,7 +245,11 @@ export const useSceneStore = defineStore("scene", {
 
         /** ---------- 子结构遍历 ---------- */
         nextGroup() {
+            // if (!this.hasMoreGroup) return;
+            // this.groupIdx += 1;
             if (!this.hasMoreGroup) return;
+            /* ⇢ 先把当前子结构记为完成，再进入下一个 */
+            this.markCurrentGroupCompleted();
             this.groupIdx += 1;
             this.enterCurrentGroup();
         },
