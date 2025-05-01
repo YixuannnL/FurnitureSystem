@@ -306,7 +306,7 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     let graph = new Map(); // pathStr -> Set<pathStr>
 
     /* ---------- 抽屉自动组装 ---------- */
-    assembleAllDrawers(furnitureTree, meshMap, removeMesh);
+    assembleAllDrawers(furnitureTree, meshMap, removeMesh, addMesh);
 
     rebuildGraph(connections);
 

@@ -35,6 +35,8 @@
         if (!n) return '';
         if (n.isAutoDrawer)
           return '当前子结构为标准件：抽屉，已经默认拼装好';
+        if(n.isDrawerIncomplete)
+          return '当前子结构为抽屉，但缺少的板件过多，请手动补全后再连接';
         return `当前你需要完成 ${n.name} 子结构的连接，下方是有关该子结构的描述，左侧可以对该子结构增删部件`;
       }
       case 2:
