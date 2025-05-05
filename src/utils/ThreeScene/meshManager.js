@@ -10,7 +10,7 @@
 
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { dimsToBoxGeom, generateAnchorPoints } from "../geometryUtils";
+import { dimsToBoxGeom, generateAnchorPoints, getFaceBBox } from "../geometryUtils";
 import { pastelColors } from "../colorPalette";
 import { assembleAllDrawers } from "../drawerUtils";
 
@@ -88,7 +88,7 @@ export function initMeshManager(ctx) {
                 pathArr: node.path,
                 path: node.path,
                 pathStr,
-                anchors: generateAnchorPoints(node.dims, 50),
+                faceBBox: getFaceBBox(mesh),      /* ← 新增 */
                 label
             };
 
@@ -203,10 +203,10 @@ export function initMeshManager(ctx) {
 
         /* userData */
         mesh.userData = {
-            pathArr,
-            path: pathArr,
+            pathArr: node.path,
+            path: node.path,
             pathStr,
-            anchors: generateAnchorPoints(dims, 50),
+            faceBBox: getFaceBBox(mesh),      /* ← 新增 */
             label
         };
 

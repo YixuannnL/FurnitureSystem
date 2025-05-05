@@ -32,8 +32,21 @@ export function initGraph(ctx) {
         meshMap.forEach((_, pathStr) => graph.set(pathStr, new Set()));
 
         // 2. 遍历连接数据
+        // conns.forEach((pair) => {
+        //     const [nameA, nameB] = Object.keys(pair);         // 连接两端短名
+        /* ---------- 预处理：保留真正的 mesh 名（过滤掉新字段） ---------- */
+        const RESERVED = new Set(["faceA", "faceB", "axis", "ratio"]);
+
+        function meshKeys(obj) {
+            return Object.keys(obj).filter(k => !RESERVED.has(k));
+        }
+
+        // 2. 遍历连接数据
         conns.forEach((pair) => {
-            const [nameA, nameB] = Object.keys(pair);         // 连接两端短名
+            const keys = meshKeys(pair);
+            if (keys.length < 2) return;                // 防御
+            const [nameA, nameB] = keys;               // 两端短名
+
             const pathsA = nameIndex[nameA] ?? [];            // 同名可能多条路径
             const pathsB = nameIndex[nameB] ?? [];
 

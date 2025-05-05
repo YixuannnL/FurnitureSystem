@@ -16,7 +16,8 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import {
     dimsToBoxGeom,
     generateAnchorPoints,
-    findByPath
+    findByPath,
+    getFaceBBox
 } from "../geometryUtils";
 
 import { useSceneStore } from "../../store";
@@ -107,6 +108,7 @@ export function initControls(ctx) {
             if (p === ctx.selectedMesh.userData.pathStr) return;
             meshMap.get(p)?.position.add(delta);
         });
+
     });
 
     // 伸缩结束：写回 meta 并替换几何
@@ -147,7 +149,9 @@ export function initControls(ctx) {
         });
 
         // 锚点
-        ctx.selectedMesh.userData.anchors = generateAnchorPoints(newDims, 50);
+        // ctx.selectedMesh.userData.anchors = generateAnchorPoints(newDims, 50);
+        // 六面数据刷新，保障后续连接检测
+        ctx.selectedMesh.userData.faceBBox = getFaceBBox(ctx.selectedMesh);
 
         // 顶部标签高度
         if (ctx.selectedMesh.userData.label) {
@@ -252,7 +256,8 @@ export function initControls(ctx) {
 
     renderer.domElement.addEventListener("pointerdown", (ev) => {
         // 仅 drag / axis 模式接管
-        if (!["drag", "axis"].includes(ctx.currentMode)) return;
+        // if (!["drag", "axis"].includes(ctx.currentMode)) return;
+        if (!["drag", "axis", "connect"].includes(ctx.currentMode)) return;
         if (isClickingGizmo()) return;
 
         downX = ev.clientX;
@@ -283,11 +288,21 @@ export function initControls(ctx) {
             const dx = e.clientX - downX;
             const dy = e.clientY - downY;
             if (dx * dx + dy * dy < CLICK_DIST * CLICK_DIST) {
-                selectMesh(null);
+                // selectMesh(null);
+                /* connect 模式下单击空白不清除，由 snap 自管 */
+                if (ctx.currentMode !== "connect") selectMesh(null);
             }
             window.removeEventListener("pointerup", onUp);
         };
         window.addEventListener("pointerup", onUp);
+    });
+
+    /* -------- 监听转发给 snap 模式 -------- */
+    renderer.domElement.addEventListener("pointermove", (e) => {
+        if (ctx.currentMode === "connect") ctx.snapPointerMove?.(e);
+    });
+    renderer.domElement.addEventListener("pointerup", (e) => {
+        if (ctx.currentMode === "connect") ctx.snapPointerUp?.(e);
     });
 
     /* ===========================================================
@@ -320,10 +335,11 @@ export function initControls(ctx) {
                 break;
 
             case "connect":
-                // 连接模式完全禁用 gizmo，并交由 connect.js 处理
+                // snap 模式完全接管，关闭 gizmo
                 tc.detach();
                 tc.enabled = false;
                 selectMesh(null);
+                ctx.resetSnapMode?.();                /* 清空 snap 内部状态 */
                 break;
 
             case "planar":

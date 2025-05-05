@@ -176,3 +176,57 @@ export function insertLeafUnderParent(root, parentPathArr, leafNode) {
     parent.children.push(leafNode);
     return true;
 }
+
+
+/**
+ * 计算 mesh 六个面在世界坐标下的几何信息，供 faceUtils / snap 模式使用
+ */
+export function getFaceBBox(mesh) {
+    const faces = {};
+    const g = mesh.geometry;
+    if (!g || g.type !== "BoxGeometry") return faces;
+
+    const { width: w, height: h, depth: d } = g.parameters;
+    const mat = mesh.matrixWorld;
+    const nVec = {
+        Left: new THREE.Vector3(-1, 0, 0),
+        Right: new THREE.Vector3(1, 0, 0),
+        Bottom: new THREE.Vector3(0, -1, 0),
+        Top: new THREE.Vector3(0, 1, 0),
+        Back: new THREE.Vector3(0, 0, -1),
+        Front: new THREE.Vector3(0, 0, 1)
+    };
+    const localCtr = {
+        Left: new THREE.Vector3(-w / 2, 0, 0),
+        Right: new THREE.Vector3(w / 2, 0, 0),
+        Bottom: new THREE.Vector3(0, -h / 2, 0),
+        Top: new THREE.Vector3(0, h / 2, 0),
+        Back: new THREE.Vector3(0, 0, -d / 2),
+        Front: new THREE.Vector3(0, 0, d / 2)
+    };
+    const uvInfo = {
+        Left: ["y", "z", h, d, w],
+        Right: ["y", "z", h, d, w],
+        Bottom: ["x", "z", w, d, h],
+        Top: ["x", "z", w, d, h],
+        Back: ["x", "y", w, h, d],
+        Front: ["x", "y", w, h, d]
+    };
+    const m3 = new THREE.Matrix3().setFromMatrix4(mat);
+    for (const name of Object.keys(nVec)) {
+        const normal = nVec[name].clone().applyMatrix3(m3).normalize();
+        const center = localCtr[name].clone().applyMatrix4(mat);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, center);
+        const [uc, vc, uLen, vLen, axisLen] = uvInfo[name];
+        const uDir = axisToDir(uc).applyMatrix3(m3).normalize();
+        const vDir = axisToDir(vc).applyMatrix3(m3).normalize();
+        faces[name] = {
+            name, axis: axisOfNormal(normal), normal, plane, center,
+            uDir, vDir, uLen, vLen, axisLen
+        };
+    }
+    return faces;
+}
+
+function axisToDir(c) { return c === "x" ? new THREE.Vector3(1, 0, 0) : c === "y" ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1); }
+function axisOfNormal(v) { return Math.abs(v.x) > Math.abs(v.y) && Math.abs(v.x) > Math.abs(v.z) ? 'x' : Math.abs(v.y) > Math.abs(v.z) ? 'y' : 'z'; }

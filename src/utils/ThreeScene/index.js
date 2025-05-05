@@ -4,7 +4,8 @@ import { initMeshManager } from "./meshManager";
 import { initGraph } from "./graph";
 import { initLayout } from "./layout";
 import { initControls } from "./controls";
-import { initConnectMode } from "./modes/connect";
+// import { initConnectMode } from "./modes/connect";
+import { initSnapMode } from "./modes/snap";
 import { initPlanarMode } from "./modes/planar";
 
 /**
@@ -41,7 +42,8 @@ export function createThreeContext(canvasEl, furnitureTree, connections, onSelec
     initGraph(ctx);           // rebuildGraph / findComponent
     initLayout(ctx);          // layout* 系列
     initControls(ctx);        // Orbit & TransformControls，选中 / 高亮 / 拖动
-    initConnectMode(ctx);     // 连接模式
+    // initConnectMode(ctx);     // 连接模式
+    initSnapMode(ctx);         // 连接模式 拖拽贴面
     initPlanarMode(ctx);      // 共面伸缩
 
     /* ---------- 返回统一的公开 API ---------- */

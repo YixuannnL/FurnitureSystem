@@ -7,7 +7,8 @@ import { useSceneStore } from "../../../store";
 import {
     findByPath,
     dimsToBoxGeom,
-    generateAnchorPoints
+    // generateAnchorPoints,
+    getFaceBBox
 } from "../../geometryUtils";
 
 /**
@@ -86,7 +87,8 @@ export function initPlanarMode(ctx) {
                 c.geometry = new THREE.EdgesGeometry(mesh.geometry, 20);
             }
         });
-        mesh.userData.anchors = generateAnchorPoints(newDims, 50);
+        // mesh.userData.anchors = generateAnchorPoints(newDims, 50);
+        mesh.userData.faceBBox = getFaceBBox(mesh);   // ★ 同步六面数据
 
         /* -- 4. 调整顶部文字标签高度 -- */
         if (mesh.userData.label) {

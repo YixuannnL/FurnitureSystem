@@ -17,6 +17,7 @@ export const useSceneStore = defineStore("scene", {
         /** 家具数据树（解析自 meta_data.json） */
         furnitureTree: buildFurnitureTree(metaRaw.meta),
         /** 连接数据（数组） */
+        /* 连接数据支持“旧格式(两键)”与“新格式(含 faceA …)” */
         connections: connRaw.data,
         /** 操作模式："connect"|"planar"|"axis"|"drag" */
         mode: "drag",
@@ -26,6 +27,10 @@ export const useSceneStore = defineStore("scene", {
         /** ★ 记录已访问过的子结构，首次进入时用来触发“清空+排布” */
         visitedGroups: new Set(),
         meshRevision: 0,          // ← 新增：mesh 删除时自增
+
+        /* ---------- 全局设置 ---------- */
+        gridStep: 50,   // mm  网格吸附步长
+        snapThreshold: 30,   // mm  面‑面吸附阈值
         /* ---------- 撤销栈 ---------- */
         undoMgr: new UndoManager(),
         /* —— 共面伸缩实时信息 —— */
@@ -152,6 +157,17 @@ export const useSceneStore = defineStore("scene", {
     },
 
     actions: {
+
+        /* ===== 工具：把  "1/3"  → 0.333 ===== */
+        _parseRatio(str) {
+            if (typeof str === "number") return str;
+            if (/^\d+\/\d+$/.test(str)) {
+                const [a, b] = str.split("/").map(Number);
+                return b ? +(a / b).toFixed(3) : 0;
+            }
+            const f = parseFloat(str);
+            return isNaN(f) ? null : f;
+        },
 
         /* ===== 快照：仅 Step-1 / Step-2 记录 ===== */
         recordSnapshot() {
@@ -412,7 +428,14 @@ export const useSceneStore = defineStore("scene", {
         updateConnections(arr, skipUndo = false) {
             // this.recordSnapshot();                 // ★ 先拍快照
             if (!skipUndo) this.recordSnapshot();  // ★ 仅在需要时入栈
-            this.connections = arr;
+            // this.connections = arr;
+            /* 深拷贝并统一 ratio 字段格式 */
+            this.connections = arr.map(c => {
+                if (c && "ratio" in c) {
+                    return { ...c, ratio: this._parseRatio(c.ratio) };
+                }
+                return c;
+            });
             // 通知 three.js 重新建立连接图
             this.threeCtx?.updateConnections(arr);
             // 若在Step 1 保证排布实时刷新

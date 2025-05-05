@@ -98,8 +98,8 @@ const meshNames = computed(() => meshes.value.map(m => m.name));
 
   const keys = (o) => Object.keys(o);
   const localConns = computed(() => {
-    const set = new Set(meshNames.value);
-    return store.connections.filter((c) => {
+  const set = new Set(meshNames.value);
+  return store.connections.filter((c) => {
       const [a, b] = keys(c);
       return set.has(a) && set.has(b);
     });

@@ -1,10 +1,19 @@
 <template>
     <div class="panel">
       <h4>连接关系 ({{ conns.length }})</h4>
-      <div v-for="(c, i) in conns" :key="i" class="conn">
-        <code>{{ Object.keys(c)[0] }} ↔ {{ Object.keys(c)[1] }}</code>
-        <button @click="del(i)">删除</button>
-      </div>
+    <div v-for="(c, i) in conns" :key="i" class="conn">
+      <code>
+        {{ Object.keys(c)[0] }}.<span>{{ c.faceA || '?' }}</span>
+        ↔
+        {{ Object.keys(c)[1] }}.<span>{{ c.faceB || '?' }}</span>
+      </code>
+      <template v-if="c.axis">
+        <span class="axis">沿 {{ c.axis.toUpperCase() }} 轴</span>
+        <input v-model="ratioStrs[i]" @blur="commit(i)" />
+      </template>
+      <span v-else class="ok">自动对齐 ✓</span>
+      <button @click="del(i)">删除</button>
+    </div>
       <button class="add" @click="adding = !adding">{{ adding ? "取消" : "增加连接" }}</button>
       <div v-if="adding" class="add-ui">
         <input v-model="left" placeholder="meshA 路径" />
@@ -15,20 +24,32 @@
   </template>
   
   <script setup>
-  import { ref, computed } from "vue";
+  import { ref, computed, watch } from "vue";
   import { useSceneStore } from "../store";
   const store = useSceneStore();
   const conns = computed(() => store.connections);
+  const ratioStrs = ref(conns.value.map(c=>c.ratio ?? ""));
   
   const adding = ref(false);
   const left = ref("");
   const right = ref("");
+
+  watch(conns, n=>{
+  ratioStrs.value = n.map(c=>c.ratio ?? "");
+});
   
   function del(i) {
     const arr = conns.value.slice();
     arr.splice(i, 1);
     store.updateConnections(arr);
   }
+
+  function commit(i){
+  const arr = conns.value.slice();
+  arr[i] = { ...arr[i], ratio: ratioStrs.value[i] };
+  store.updateConnections(arr);
+}
+
   function add() {
     if (!left.value || !right.value) return;
     const arr = conns.value.slice();

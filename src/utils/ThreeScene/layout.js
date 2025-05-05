@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 
+
 export function initLayout(ctx) {
     /* 只提前取到始终不会变的引用 */
     const { meshMap, graph, scene } = ctx;
@@ -17,7 +18,9 @@ export function initLayout(ctx) {
         const visited = new Set();
 
         /* --- 聚连通分量 --- */
-        meshMap.forEach((_, key) => {
+        // meshMap.forEach((_, key) => {
+        meshMap.forEach((mesh, key) => {
+            mesh.updateMatrixWorld(true);  /* ← 确保 faceBBox 最新 */
             if (!key.startsWith(prefix) || visited.has(key)) return;
             const comp = [];
             const q = [key];
