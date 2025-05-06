@@ -33,7 +33,7 @@ import {
     gridSnap,
     ratioFromOffset
 } from "../../faceUtils";
-import { getFaceBBox } from "../../geometryUtils";
+import { getFaceBBox, findByPath } from "../../geometryUtils";
 
 export function initSnapMode(ctx) {
     /* ─────────────── 共享引用与配置 ─────────────── */
@@ -67,6 +67,28 @@ export function initSnapMode(ctx) {
         commonAxis: 'x'|'y'|'z'|null   // 自动对齐后剩余自由轴
       }
     */
+    /* ---------- ★★  二段式滑动阶段状态 ---------- */
+    let slidingReady = false;          // 已经贴面、等待第二次拖动
+    let slidingAxis = null;           // 'x'|'y'|'z'
+    let slidingConn = null;           // 预生成的连接对象（实时更新 ratio）
+    let slidingComp = [];             // compMove 列表
+    let slidingCenterB = 0;            // faceB.center[axis]，常数
+    let faceBLenU = 0, faceBLenV = 0;  // 供顶/底/中吸附
+    let lenAaxis = 0, lenBaxis = 0;    // 两物体在滑动轴方向的尺寸
+    let slidingDragging = false;       // 第二段拖拽标记
+    const SNAP_T = () => store.snapThreshold;
+
+    /* —— 小工具：十进制 → 最简分数（分母 ≤20） —— */
+    function dec2frac(dec) {
+        if (Math.abs(dec) < 1e-4) return "0";
+        for (let d = 1; d <= 20; d++) {
+            const n = Math.round(dec * d);
+            if (Math.abs(dec - n / d) < 1e-4) {
+                return `${n}/${d}`;
+            }
+        }
+        return dec.toFixed(3);
+    }
 
     function restoreOrbit() {
         if (ctx.orbit) ctx.orbit.enabled = true;
@@ -77,14 +99,12 @@ export function initSnapMode(ctx) {
         helpers.forEach(h => ctx.scene.remove(h));
         helpers.length = 0;
         candidate = null;
+        slidingReady = false;
+        slidingAxis = null;
+        slidingConn = null;
+        slidingComp = [];
+        slidingDragging = false;
     }
-
-    // function addPlaneHelper(face, color) {
-    //     const size = Math.max(face.uLen, face.vLen);
-    //     const helper = new THREE.PlaneHelper(face.plane, size, color);
-    //     ctx.scene.add(helper);
-    //     helpers.push(helper);
-    // }
 
     /* ——— 在面实际位置画矩形轮廓 ——— */
     function addRectHelper(face, color) {
@@ -148,6 +168,42 @@ export function initSnapMode(ctx) {
         if (ctx.currentMode !== "connect") return;  // 名称沿用 "connect"
         if (ev.button !== 0) return;                // 左键
 
+
+        /* ---------- ★★ 如处于二段滑动准备态，改为启动单轴拖动 ---------- */
+        if (slidingReady) {
+            /* 只要点中 slidingComp 里的任何 mesh 就进入拖动 */
+            toNDC(ev);
+            raycaster.setFromCamera(mouseNDC, ctx.camera);
+            const hits = raycaster.intersectObjects(
+                slidingComp.map(p => ctx.meshMap.get(p)),
+                false
+            );
+
+            if (hits.length) {
+                slidingDragging = true;
+
+                /* 拖动平面同第一段：相机正对面 */
+                dragPlane.setFromNormalAndCoplanarPoint(
+                    ctx.camera.getWorldDirection(new THREE.Vector3()),
+                    hits[0].point
+                );
+                dragStart.copy(hits[0].point);
+
+                /* 关闭 OrbitControls */
+                orbitPrevEnabled = ctx.orbit.enabled;
+                ctx.orbit.enabled = false;
+
+                domEl.setPointerCapture(ev.pointerId);
+                return;
+            }
+            /* 如果没点到组件则视为取消操作 */
+            clearHelpers();
+            ctx.highlightPath([]);
+            restoreOrbit();
+            return;
+        }
+
+
         toNDC(ev);
         raycaster.setFromCamera(mouseNDC, ctx.camera);
         const hits = raycaster.intersectObjects(
@@ -187,6 +243,69 @@ export function initSnapMode(ctx) {
 
     /** ----- pointermove : 拖拽 & 面对检测 ----- */
     function onPointerMove(ev) {
+        /* ---------- ★★ 滑动阶段的 pointermove ---------- */
+        if (slidingDragging) {
+            toNDC(ev);
+            raycaster.setFromCamera(mouseNDC, ctx.camera);
+            const pos = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dragPlane, pos);
+            if (!pos) return;
+
+            const delta = pos.clone().sub(dragStart);
+            dragStart.copy(pos);
+
+            const axis = slidingAxis;
+            const step = store.gridStep;
+
+            /* 只保留该轴位移 */
+            const move = delta[axis];
+            if (Math.abs(move) < 1e-6) return;
+
+            /* 先整组平移 */
+            slidingComp.forEach(p => {
+                const m = ctx.meshMap.get(p);
+                if (m) m.position[axis] += move;
+            });
+
+            /* —— 计算中心差值 & 吸附 —— */
+            const meshA0 = ctx.meshMap.get(slidingComp[0]);
+            const ctrA = new THREE.Box3().setFromObject(meshA0).getCenter(new THREE.Vector3())[axis];
+            let offset = ctrA - slidingCenterB;                // A 相对 B 的位移
+
+            /* a) 端点 / 中点吸附  —— 优先级最高 */
+            const halfA = lenAaxis * 0.5;
+            const halfB = lenBaxis * 0.5;
+            const targets = [-halfB + halfA, 0, halfB - halfA];  // Bottom / Center / Top
+            let snapped = null;
+            for (const t of targets) {
+                if (Math.abs(offset - t) < SNAP_T()) { snapped = t; break; }
+            }
+
+            /* b) 网格吸附  */
+            if (snapped === null) {
+                const g = gridSnap(offset, step);
+                if (Math.abs(offset - g) < SNAP_T()) snapped = g;
+            }
+
+            /* c) 若需吸附 → 计算补偿位移 */
+            if (snapped !== null && Math.abs(snapped - offset) > 1e-6) {
+                const need = snapped - offset;
+                slidingComp.forEach(p => {
+                    const m = ctx.meshMap.get(p);
+                    if (m) m.position[axis] += need;
+                });
+                offset = snapped;
+                /* 关键：更新 dragStart，让下一帧以新基准计算，防抖动 */
+                dragStart[axis] += need;
+            }
+            /* —— 实时写 ratio，右侧面板自动刷新 —— */
+            const axisLen = lenBaxis;                      // 以被贴面物体尺寸为分母
+            const ratioDec = ratioFromOffset(offset, axisLen);
+            slidingConn.ratio = dec2frac(ratioDec);   // 直接改同一对象，避免新建
+            return;
+        }
+
+        /* ---------- ★★ 第一段拖拽检测 ---------- */
         if (!dragging) return;
         toNDC(ev);
         raycaster.setFromCamera(mouseNDC, ctx.camera);
@@ -244,6 +363,25 @@ export function initSnapMode(ctx) {
 
     /** ----- pointerup : 若有候选则建立连接 ----- */
     function onPointerUp(ev) {
+        /* ---------- ★★ 第二段滑动结束 ---------- */
+        if (slidingDragging) {
+            slidingDragging = false;
+            domEl.releasePointerCapture(ev.pointerId);
+
+            // /* 最终提交（ratio 已在 pointermove 中写入） */
+            // store.updateConnections(
+            //     [...store.connections.filter(c => c !== slidingConn), slidingConn]
+            // );
+            /* 最终提交：拷贝当前数组即可（ratio 已写入） */
+            store.updateConnections([...store.connections]);
+
+            clearHelpers();
+            ctx.highlightPath([]);
+            restoreOrbit();
+            return;
+        }
+
+        /* ---------- ★★ 第一段拖拽结束 ---------- */
         if (!dragging) return;
         dragging = false;
         domEl.releasePointerCapture(ev.pointerId);
@@ -339,16 +477,50 @@ export function initSnapMode(ctx) {
             ratio                          // 可能为 null
         };
 
-        /* 4. 更新全局连接 & 重建图 ---------------------- */
+        /* ---------- ★★ 若还有 1 自由轴：进入滑动准备态 ---------- */
+        if (axis) {
+            slidingReady = true;
+            slidingAxis = axis;
+            slidingConn = connObj;
+            slidingComp = [...compMove];
+            slidingCenterB = candidate.faceB.center[axis];
+            faceBLenU = candidate.faceB.uLen;
+            faceBLenV = candidate.faceB.vLen;
+
+
+            store.updateConnections([...store.connections, connObj], true);
+
+            /* 重要：让 slidingConn 指向 **数组里的那份对象**（避免引用失配） */
+            slidingConn = store.connections.find(c => {
+                const k = Object.keys(c);
+                return k.includes(objA) && k.includes(objB);
+            });
+
+            /* 计算沿 slidingAxis 的尺寸（用包围盒） */
+            {
+                const vec = new THREE.Vector3();
+                const meshA0 = ctx.meshMap.get(slidingComp[0]);
+                const boxA = new THREE.Box3().setFromObject(meshA0);
+                boxA.getSize(vec);
+                lenAaxis = vec[slidingAxis];
+
+                const meshB0 = candidate.meshB;
+                const boxB = new THREE.Box3().setFromObject(meshB0);
+                boxB.getSize(vec);
+                lenBaxis = vec[slidingAxis];
+            }
+
+            /* 保留高亮，允许转视角查看 */
+            restoreOrbit();
+            return;
+        }
+
+        /* ---------- ★★ 0 自由度：一次性完成 ---------- */
         store.updateConnections([...store.connections, connObj]);
 
-        /* 5. 清理高亮 & 帮助线 */
         clearHelpers();
         ctx.highlightPath([]);
-
-        /* ---------- 恢复 OrbitControls ---------- */
-        // if (ctx.orbit) ctx.orbit.enabled = orbitPrevEnabled;
-        restoreOrbit();                       // ★ 成功连接后也恢复 Orbit
+        restoreOrbit();
     }
 
     /* === 重置接口（切模式 / 撤销） ============================ */
