@@ -406,6 +406,9 @@ export const useSceneStore = defineStore("scene", {
 
       /* 进入第 1 步：准备自底向上遍历队列 */
       if (n === 1) {
+        // 【进入 Step 1 时先清空所有连接
+        this.updateConnections([], true);
+
         this.groupPaths = collectGroupsBottomUp(this.furnitureTree);
         this.groupIdx = 0;
         this.visitedGroups.clear();
