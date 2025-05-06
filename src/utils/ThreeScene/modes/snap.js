@@ -225,6 +225,7 @@ export function initSnapMode(ctx) {
                 const facesB = mB.userData.faceBBox;
 
                 const pairs = getParallelFaces(facesA, facesB, snapT);
+                // console.log("pairs:", pairs);
                 pairs.forEach(pair => {
                     if (pair.dist < bestDist) {
                         best = { ...pair, meshA: mA, meshB: mB };
@@ -260,6 +261,40 @@ export function initSnapMode(ctx) {
             if (m) m.position.add(candidate.delta);
         });
 
+        /* ---------- ★ 平面内自动对齐 ---------- */
+        let deltaPlane = new THREE.Vector3();   // ← 提升作用域，外层可见
+        {
+            const EPS = 1;                     // 1 mm 判定阈
+
+            /* A 面中心已平移到 A'，需使用新中心参与计算 */
+            const centerA = candidate.faceA.center.clone().add(candidate.delta);
+            const centerB = candidate.faceB.center.clone();
+
+            const { uDir, vDir, uLen, vLen } = candidate.faceA;
+            const sameU = Math.abs(uLen - candidate.faceB.uLen) < EPS;
+            const sameV = Math.abs(vLen - candidate.faceB.vLen) < EPS;
+
+            /* 计算沿 u/v 方向需要补偿的平移量（让中心重合） */
+            // const deltaPlane = new THREE.Vector3();
+            if (sameU) {
+                const du = centerB.clone().sub(centerA).dot(uDir);
+                deltaPlane.addScaledVector(uDir, du);
+            }
+            if (sameV) {
+                const dv = centerB.clone().sub(centerA).dot(vDir);
+                deltaPlane.addScaledVector(vDir, dv);
+            }
+
+            /* 把补偿量同步到 compMove 整体 */
+            if (deltaPlane.lengthSq() > 1e-6) {
+                compMove.forEach(p => {
+                    const m = ctx.meshMap.get(p);
+                    if (m) m.position.add(deltaPlane);
+                });
+            }
+        }
+
+
         /* 2. 自动对齐 & 网格吸附 ------------------------ */
         let ratio = null;
         let axis = candidate.commonAxis;   // 剩余自由轴 (可能为 null)
@@ -268,8 +303,12 @@ export function initSnapMode(ctx) {
             /* 沿该轴做网格吸附 (gridStep) */
             const step = store.gridStep;
 
-            const centerA = candidate.faceA.center.clone().add(candidate.delta);
-            const centerB = candidate.faceB.center.clone();     // 已重合平面
+            const centerA = candidate.faceA.center
+                .clone()
+                .add(candidate.delta)    // 法向平移
+                .add(deltaPlane);        // 平面贴边补偿（可能是 0 向量）
+            const centerB = candidate.faceB.center.clone();
+
 
             const offset = centerA[axis] - centerB[axis];
             const snapped = gridSnap(offset, step);
