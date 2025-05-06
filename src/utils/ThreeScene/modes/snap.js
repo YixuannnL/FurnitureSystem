@@ -269,39 +269,81 @@ export function initSnapMode(ctx) {
 
             /* —— 计算中心差值 & 吸附 —— */
             const meshA0 = ctx.meshMap.get(slidingComp[0]);
-            const ctrA = new THREE.Box3().setFromObject(meshA0).getCenter(new THREE.Vector3())[axis];
-            let offset = ctrA - slidingCenterB;                // A 相对 B 的位移
+            // const ctrA = new THREE.Box3().setFromObject(meshA0).getCenter(new THREE.Vector3())[axis];
+            // let offset = ctrA - slidingCenterB;                // A 相对 B 的位移
 
-            /* a) 端点 / 中点吸附  —— 优先级最高 */
+            // /* a) 端点 / 中点吸附  —— 优先级最高 */
+            // const halfA = lenAaxis * 0.5;
+            // const halfB = lenBaxis * 0.5;
+            // const targets = [-halfB + halfA, 0, halfB - halfA];  // Bottom / Center / Top
+            // let snapped = null;
+            // for (const t of targets) {
+            //     if (Math.abs(offset - t) < SNAP_T()) { snapped = t; break; }
+            // }
+
+            // /* b) 网格吸附  */
+            // if (snapped === null) {
+            //     const g = gridSnap(offset, step);
+            //     if (Math.abs(offset - g) < SNAP_T()) snapped = g;
+            // }
+
+            // /* c) 若需吸附 → 计算补偿位移 */
+            // if (snapped !== null && Math.abs(snapped - offset) > 1e-6) {
+            //     const need = snapped - offset;
+            //     slidingComp.forEach(p => {
+            //         const m = ctx.meshMap.get(p);
+            //         if (m) m.position[axis] += need;
+            //     });
+            //     offset = snapped;
+            //     /* 关键：更新 dragStart，让下一帧以新基准计算，防抖动 */
+            //     dragStart[axis] += need;
+            // }
+            const ctrA = new THREE.Box3()
+                .setFromObject(meshA0)
+                .getCenter(new THREE.Vector3())[axis];
+            let offset = ctrA - slidingCenterB;       // A 相对 B 的位移
+
+            /* ---------- A) 限制在合法区间 ---------- */
             const halfA = lenAaxis * 0.5;
             const halfB = lenBaxis * 0.5;
-            const targets = [-halfB + halfA, 0, halfB - halfA];  // Bottom / Center / Top
+            let minOff = -halfB + halfA;
+            let maxOff = halfB - halfA;
+            /* 若 A 比 B 大，则无法滑动，夹为 0 */
+            if (minOff > maxOff) minOff = maxOff = 0;
+
+            if (offset < minOff) offset = minOff;
+            if (offset > maxOff) offset = maxOff;
+
+            /* ---------- B) 端点 / 中点 / 网格吸附 ---------- */
+            const snapTargets = [minOff, 0, maxOff];  // Bottom / Center / Top
             let snapped = null;
-            for (const t of targets) {
+            for (const t of snapTargets) {
                 if (Math.abs(offset - t) < SNAP_T()) { snapped = t; break; }
             }
-
-            /* b) 网格吸附  */
             if (snapped === null) {
                 const g = gridSnap(offset, step);
                 if (Math.abs(offset - g) < SNAP_T()) snapped = g;
             }
+            if (snapped !== null) offset = THREE.MathUtils.clamp(snapped, minOff, maxOff);
 
-            /* c) 若需吸附 → 计算补偿位移 */
-            if (snapped !== null && Math.abs(snapped - offset) > 1e-6) {
-                const need = snapped - offset;
+            /* ---------- C) 把 compMove 校正到 offset ---------- */
+            const need = offset - (ctrA - slidingCenterB);
+            if (Math.abs(need) > 1e-6) {
                 slidingComp.forEach(p => {
                     const m = ctx.meshMap.get(p);
                     if (m) m.position[axis] += need;
                 });
-                offset = snapped;
-                /* 关键：更新 dragStart，让下一帧以新基准计算，防抖动 */
+                /* 更新 dragStart —— 防止下一帧累积误差 / 抖动 */
                 dragStart[axis] += need;
             }
+
+            /* ---------- D) ratio 实时刷新 ---------- */
+            const ratioDec = ratioFromOffset(offset, lenBaxis);
+            slidingConn.ratio = dec2frac(ratioDec);
             /* —— 实时写 ratio，右侧面板自动刷新 —— */
             const axisLen = lenBaxis;                      // 以被贴面物体尺寸为分母
-            const ratioDec = ratioFromOffset(offset, axisLen);
-            slidingConn.ratio = dec2frac(ratioDec);   // 直接改同一对象，避免新建
+            // const ratioDec = ratioFromOffset(offset, axisLen);
+            // slidingConn.ratio = dec2frac(ratioDec);   // 直接改同一对象，避免新建
             return;
         }
 
