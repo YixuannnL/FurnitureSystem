@@ -213,24 +213,44 @@ export const useSceneStore = defineStore("scene", {
       }
       if (axisLen < 1e-3) return;
 
-      //   /* 3. 平移整组件 */
+      //   /* 3. 仅平移 meshA（被拖动的板件或其父组） */
       //   const delta = (newR - oldR) * axisLen;
-      //   const comp = this.threeCtx?.findComponent(pathA) ?? [];
-      //   comp.forEach((p) => {
-      //     const m = this.threeCtx.meshMap.get(p);
-      //     if (m) {
-      //       m.position[axis] += delta;
-      //       m.updateMatrixWorld(true);
-      //       m.userData.faceBBox = getFaceBBox(m);
-      //     }
-      //   });
-      /* 3. 仅平移 meshA（被拖动的板件或其父组） */
-      const delta = (newR - oldR) * axisLen;
-      const meshMove = meshA; // 只动 A
+      /* 3. 仅平移 meshA：Δ = (newR − oldR) × (lenB − lenA) */
+      //   const lenA = lenAaxis;
+      //   const lenB = lenBaxis;
+
+      /* 重新计算 lenAaxis / lenBaxis */
+      //   {
+      //     const vec = new THREE.Vector3();
+      //     const boxA = new THREE.Box3().setFromObject(meshA);
+      //     boxA.getSize(vec);
+      //     lenAaxis = vec[axis];
+
+      //     const boxB = new THREE.Box3().setFromObject(meshB);
+      //     boxB.getSize(vec);
+      //     lenBaxis = vec[axis];
+      //   }
+      //   const axisRange = lenBaxis - lenAaxis;
+      //   if (axisRange < 1e-3) return;
+
+      //   const delta = (newR - oldR) * axisRange;
+      //   const meshMove = meshA; // 只动 A
+      /* 3. 仅平移 meshA：Δ = (newR − oldR) × (lenB − lenA) */
+      const vec = new THREE.Vector3();
+
+      const lenAaxis = new THREE.Box3().setFromObject(meshA).getSize(vec)[axis];
+      const lenBaxis = new THREE.Box3().setFromObject(meshB).getSize(vec)[axis];
+
+      const axisRange = lenBaxis - lenAaxis;
+      if (axisRange < 1e-3) return; // 无可滑动范围
+
+      const delta = (newR - oldR) * axisRange;
+      const meshMove = meshA; // 只移动 A
       meshMove.position[axis] += delta;
       meshMove.updateMatrixWorld(true);
       meshMove.userData.faceBBox = getFaceBBox(meshMove);
     },
+
     /* ===== 工具：把  "1/3"  → 0.333 ===== */
     _parseRatio(str) {
       if (typeof str === "number") return str;

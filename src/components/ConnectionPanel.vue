@@ -65,13 +65,31 @@ function del(i) {
 
 function commit(i) {
   const arr = conns.value.slice();
-  const oldRaw = arr[i].ratio ?? 0; // 旧值（number）
-  const newRaw = ratioStrs.value[i]; // 输入框内容
+  // const oldRaw = arr[i].ratio ?? 0; // 旧值（number）
+  // const newRaw = ratioStrs.value[i]; // 输入框内容
 
-  /* 解析为十进制数；若解析失败则维持原状 */
-  const oldR = typeof oldRaw === "number" ? oldRaw : parseRatio(oldRaw);
-  const newR = parseRatio(newRaw);
-  if (newR === null || oldR === null) return;
+  // /* 解析为十进制数；若解析失败则维持原状 */
+  // const oldR = typeof oldRaw === "number" ? oldRaw : parseRatio(oldRaw);
+  // const newR = parseRatio(newRaw);
+  // if (newR === null || oldR === null) return;
+
+  const oldRaw = arr[i].ratio ?? "0";
+  const newRaw = ratioStrs.value[i];
+
+  /* -------- 工具：分数/小数 → 十进制 -------- */
+  const toDec = (str) => {
+    if (typeof str === "number") return str;
+    if (/^\d+\/\d+$/.test(str)) {
+      const [n, d] = str.split("/").map(Number);
+      return d ? n / d : 0;
+    }
+    const f = parseFloat(str);
+    return isNaN(f) ? null : f;
+  };
+
+  const oldR = toDec(oldRaw);
+  const newR = toDec(newRaw);
+  if (oldR === null || newR === null || Math.abs(newR - oldR) < 1e-6) return;
 
   /* 写入连接对象（字符串形式，交给 updateConnections 再解析） */
   arr[i] = { ...arr[i], ratio: newRaw };
