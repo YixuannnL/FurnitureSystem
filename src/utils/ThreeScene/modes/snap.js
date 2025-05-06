@@ -518,8 +518,8 @@ export function initSnapMode(ctx) {
       [objB]: "",
       faceA: candidate.faceA.name, // 'Left' / 'Top' / ...
       faceB: candidate.faceB.name,
-      axis, // null 表示 0 自由轴 (全对齐)
-      ratio, // 可能为 null
+      axis, // null = 已完全对齐
+      ratio: axis ? "0" : null, // ★ 初次进入滑动阶段 → 起点 0
     };
 
     /* ---------- ★★ 若还有 1 自由轴：进入滑动准备态 ---------- */
