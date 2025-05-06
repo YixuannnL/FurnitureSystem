@@ -9,10 +9,7 @@
       </aside>
 
       <!-- 左侧拖拽条 -->
-      <div
-        class="resizer"
-        @mousedown="startResize('left', $event)"
-      ></div>
+      <div class="resizer" @mousedown="startResize('left', $event)"></div>
 
       <!-- —— 中央 3D 场景 —— -->
       <section class="center">
@@ -20,22 +17,24 @@
       </section>
 
       <!-- 右侧拖拽条 -->
-        <div
-        class="resizer"
-        @mousedown="startResize('right', $event)"
-      ></div>
+      <div class="resizer" @mousedown="startResize('right', $event)"></div>
 
       <!-- —— 右侧面板 —— -->
       <aside class="right" :style="{ width: rightWidth + 'px' }">
         <!-- 共面伸缩模式 -->
-        <PlanarPanel       v-if="mode === 'planar'" />
-        <!-- Step-1：根据是否叶子决定面板 -->
+        <PlanarPanel v-if="mode === 'planar'" />
+        <!-- 连接模式：仅 Step‑1 / Step‑2 显示连接面板 -->
+        <ConnectionPanel
+          v-else-if="mode === 'connect' && (step === 1 || step === 2)"
+        />
+
+        <!-- Step‑1（非 connect）：按叶/组面板 -->
         <template v-else-if="step === 1">
-        <MeshPanel  v-if="isLeaf" />
-        <GroupPanel v-else      />
+          <MeshPanel v-if="isLeaf" />
+          <GroupPanel v-else />
         </template>
-        <!-- 其它步骤统一用连接面板 -->
-        <ConnectionPanel   v-else /> <!-- Step 0 / 2 / 3 均显示连接面板 -->
+
+        <!-- 其它情况（Step‑0 / Step‑3）保持空或自定义面板 -->
       </aside>
     </main>
 
@@ -44,7 +43,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'  
+import { computed, ref } from "vue";
 import { onMounted, onUnmounted } from "vue";
 import StepperBar from "./components/StepperBar.vue";
 import PartTree from "./components/PartTree.vue";
@@ -52,9 +51,9 @@ import FurnitureScene from "./components/FurnitureScene.vue";
 import ConnectionPanel from "./components/ConnectionPanel.vue";
 import Toolbar from "./components/Toolbar.vue";
 import GroupPanel from "./components/GroupPanel.vue";
-import MeshPanel from './components/MeshPanel.vue';
-import PlanarPanel from './components/PlanarPanel.vue';
-import { findByPath } from './utils/geometryUtils';
+import MeshPanel from "./components/MeshPanel.vue";
+import PlanarPanel from "./components/PlanarPanel.vue";
+import { findByPath } from "./utils/geometryUtils";
 import { useSceneStore } from "./store";
 
 /* ---------- Pinia 状态 ----------- */
@@ -69,13 +68,13 @@ const isLeaf = computed(() => {
 });
 
 /* -------- 可拖拽宽度状态 --------- */
-const MIN = 160;              // 面板最小宽度 (px)
-const leftWidth  = ref(260);  // 默认 宽度
+const MIN = 160; // 面板最小宽度 (px)
+const leftWidth = ref(260); // 默认 宽度
 const rightWidth = ref(260);
 
-let draggingSide = "";        // 'left' | 'right'
-let startX = 0;               // pointerdown 位置
-let startW = 0;               // 起始宽度
+let draggingSide = ""; // 'left' | 'right'
+let startX = 0; // pointerdown 位置
+let startW = 0; // 起始宽度
 
 function startResize(side, ev) {
   draggingSide = side;
@@ -114,7 +113,6 @@ onMounted(() => {
   window.addEventListener("keydown", handler);
   onUnmounted(() => window.removeEventListener("keydown", handler));
 });
-
 </script>
 
 <style scoped>
@@ -141,8 +139,12 @@ aside.right {
   border: 1px solid #e2e2e2;
   border-top: none;
 }
-aside.left  { border-left: none;  }
-aside.right { border-right: none; }
+aside.left {
+  border-left: none;
+}
+aside.right {
+  border-right: none;
+}
 
 /* 中央场景自适应填充 */
 section.center {
