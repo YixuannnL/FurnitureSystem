@@ -48,6 +48,8 @@ export function initSnapMode(ctx) {
   /** 起点世界坐标 (PointerDown 射线与 dragPlane 交点) */
   let dragStart = new THREE.Vector3();
   let dragPlane = new THREE.Plane(); // 垂直于相机视线
+  let slidingMinOff = 0,
+    slidingMaxOff = 0; // 二段滑动区间
 
   /** 高亮缓存 */
   /** @type {THREE.PlaneHelper[]} */
@@ -738,19 +740,21 @@ export function initSnapMode(ctx) {
     const meshA = ctx.meshMap.get(slidingComp[0]);
     if (!meshA) return;
 
-    /* A 相对 B 的中心偏移 */
+    /* 当前偏移（中心差值） */
     const ctrA = new THREE.Box3()
       .setFromObject(meshA)
       .getCenter(new THREE.Vector3())[axis];
     let offset = ctrA - slidingCenterB;
 
-    /* --------- 限制 + 端点/中点/网格吸附 (代码与原 pointermove 相同) ---------- */
+    /* ---------- A) 合法区间 ---------- */
     const halfA = lenAaxis * 0.5;
     const halfB = lenBaxis * 0.5;
-    let minOff = -halfB + halfA;
-    let maxOff = halfB - halfA;
-    if (minOff > maxOff) minOff = maxOff = 0;
+    const minOff = -(halfA + halfB);
+    const maxOff = halfA + halfB;
+    if (offset < minOff) offset = minOff;
+    if (offset > maxOff) offset = maxOff;
 
+    /* ---------- B) 端点 / 中点 / 网格吸附 ---------- */
     const snapTargets = [minOff, 0, maxOff];
     let snapped = null;
     for (const t of snapTargets) {
@@ -766,21 +770,21 @@ export function initSnapMode(ctx) {
     if (snapped !== null)
       offset = THREE.MathUtils.clamp(snapped, minOff, maxOff);
 
-    /* --------- 若需补偿位移，则整组同步 ---------- */
+    /* ---------- C) 把 compMove 校正到 offset ---------- */
     const need = offset - (ctrA - slidingCenterB);
     if (Math.abs(need) > 1e-6) {
-      adjusting = true; // 锁递归
+      adjusting = true;
       slidingComp.forEach((p) => {
         const m = ctx.meshMap.get(p);
         if (m) m.position[axis] += need;
       });
       adjusting = false;
-      syncPrev(meshA); // ← 新增：基准对齐
+      syncPrev(meshA); // 防止下一帧反拖
     }
 
-    /* --------- ratio 更新到连接对象 ---------- */
-    const axisRange = lenBaxis - lenAaxis;
-    const ratioDec = axisRange < 1e-3 ? 0 : (offset - minOff) / axisRange;
+    /* ---------- D) ratio 实时刷新 ---------- */
+    const axisRange = lenAaxis + lenBaxis; // always >0
+    const ratioDec = (offset - minOff) / axisRange; // ∈[0,1]
     slidingConn.ratio = dec2frac(ratioDec);
   }
 
@@ -900,6 +904,12 @@ export function initSnapMode(ctx) {
 
       const boxB = new THREE.Box3().setFromObject(candidate.meshB).getSize(vec);
       lenBaxis = vec[slidingAxis];
+
+      /* ----------- 计算合法区间 ----------- */
+      const halfA = lenAaxis * 0.5;
+      const halfB = lenBaxis * 0.5;
+      slidingMinOff = -(halfA + halfB); // 刚好“左边缘接触”
+      slidingMaxOff = halfA + halfB; // 右边缘接触
 
       /* ---------- FIX‑BEGIN : Gizmo 仅显示自由轴 ---------- */
       if (ctx.transformCtrls) {
