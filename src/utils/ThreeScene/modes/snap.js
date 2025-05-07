@@ -76,6 +76,19 @@ export function initSnapMode(ctx) {
   let slidingDragging = false; // 第二段拖拽标记
   const SNAP_T = () => store.snapThreshold;
 
+  /* ================================================================
+   *  utils：保证连接唯一
+   * ============================================================= */
+  function withUniqueConn(array, objA, objB, newConn) {
+    /* 过滤掉已经连接同一对板件的旧条目（忽略顺序） */
+    const next = array.filter((c) => {
+      const ks = Object.keys(c);
+      return !(ks.includes(objA) && ks.includes(objB));
+    });
+    next.push(newConn);
+    return next;
+  }
+
   /* —— 小工具：十进制 → 最简分数（分母 ≤20） —— */
   function dec2frac(dec) {
     if (Math.abs(dec) < 1e-4) return "0";
@@ -166,12 +179,91 @@ export function initSnapMode(ctx) {
     });
   }
 
+  /* ===  新增：引用 TransformControls 及其事件钩子  ================= */
+  const tc = ctx.transformCtrls;
+  let tcDragging = false; // 当前是否由 gizmo 拖动
+  let adjusting = false; // snap.js 内部自动补偿位移保护锁
+  let lastPos = new THREE.Vector3(); // 上一帧 gizmo 位姿
+
+  /* -------------------------------------------------------- *
+   *  当 gizmo 抓取开始 / 结束 ————— 记录快照 & 完成提交
+   * -------------------------------------------------------- */
+  tc.addEventListener("dragging-changed", (e) => {
+    if (ctx.currentMode !== "connect") return;
+    tcDragging = e.value; // true = 开始，false = 结束
+
+    /* ===== 拖拽结束 ===== */
+    if (!tcDragging) {
+      /* ---------- ①  二段拖拽结束  ---------- */
+      if (slidingReady) {
+        store.updateConnections([...store.connections]); // ratio 已写入
+        slidingReady = false;
+
+        /* 复位 gizmo / 选中 */
+        if (ctx.transformCtrls) {
+          const t = ctx.transformCtrls;
+          t.detach();
+          t.showX = t.showY = t.showZ = true;
+          t.showXY = t.showYZ = t.showXZ = t.showXYZ = false;
+        }
+        ctx.selectedMesh = null;
+        clearHelpers();
+        ctx.highlightPath([]);
+        return; // 全部收尾 → 退出
+      }
+
+      /* ---------- ②  第一段贴面完成 ---------- */
+      if (candidate) {
+        finalizeCandidate(); // 可能进入二段滑动
+
+        /* 若 **没有** 进入二段滑动 ⇒ 立即做收尾 */
+        if (!slidingReady) {
+          if (ctx.transformCtrls) {
+            const t = ctx.transformCtrls;
+            t.detach();
+            t.showX = t.showY = t.showZ = true;
+            t.showXY = t.showYZ = t.showXZ = t.showXYZ = false;
+          }
+          ctx.selectedMesh = null;
+          clearHelpers();
+          ctx.highlightPath([]);
+        }
+        return;
+      }
+
+      /* ---------- ③ 只是普通拖拽 ---------- */
+      clearHelpers();
+      ctx.highlightPath([]);
+    }
+  });
+
+  /* -------------------------------------------------------- *
+   *  gizmo 拖动过程：实时检测平行面 / 二段滑动
+   * -------------------------------------------------------- */
+  tc.addEventListener("objectChange", () => {
+    if (ctx.currentMode !== "connect" || !tcDragging || adjusting) return;
+    if (!ctx.selectedMesh) return;
+
+    /* —— 和 controls.js 一样，同步整组 compMove —— 已由 controls.js 完成
+     *    这里只做吸附检测 / 二段滑动逻辑
+     */
+
+    if (slidingReady) {
+      updateSliding(); // 二段滑动实时 ratio 更新
+    } else {
+      updateCandidate(); // 第一段拖拽实时检测面对
+    }
+  });
+
   /* === pointer 事件 ================================================= */
 
   /** ----- pointerdown : 选中组件并建立拖拽平面 ----- */
   function onPointerDown(ev) {
     if (ctx.currentMode !== "connect") return; // 名称沿用 "connect"
     if (ev.button !== 0) return; // 左键
+
+    /* 若点中的是 gizmo 把手则完全交给 TransformControls */
+    if (ctx.transformCtrls && ctx.transformCtrls.axis) return;
 
     /* ---------- ★★ 如处于二段滑动准备态，改为启动单轴拖动 ---------- */
     if (slidingReady) {
@@ -184,7 +276,7 @@ export function initSnapMode(ctx) {
       );
 
       if (hits.length) {
-        slidingDragging = true;
+        // slidingDragging = true;
 
         /* 拖动平面同第一段：相机正对面 */
         dragPlane.setFromNormalAndCoplanarPoint(
@@ -229,128 +321,141 @@ export function initSnapMode(ctx) {
     );
     dragStart.copy(hits[0].point);
 
-    dragging = true;
+    // dragging = true;
+    clearHelpers();
+
+    /* -------------- Gizmo 设置：仅三轴把手 ---------------- */
+    if (ctx.transformCtrls) {
+      const t = ctx.transformCtrls;
+      t.attach(meshA); // 绑定 gizmo
+      t.setMode("translate");
+      t.showX = t.showY = t.showZ = true;
+      t.showXY = t.showYZ = t.showXZ = t.showXYZ = false; // 关闭平面/中心
+    }
+    ctx.selectedMesh = meshA; // ← 让 objectChange 能正常工作
+
+    /* 不再启用旧的自由拖拽平面 —— 删除 dragging = true */
     clearHelpers();
 
     /* 撤销栈：先拍快照，避免 pointermove 每帧拍 */
     store.recordSnapshot();
 
     /* ---------- 关闭 OrbitControls ---------- */
-    if (ctx.orbit) {
-      orbitPrevEnabled = ctx.orbit.enabled;
-      ctx.orbit.enabled = false;
-    }
+    // if (ctx.orbit) {
+    //   orbitPrevEnabled = ctx.orbit.enabled;
+    //   ctx.orbit.enabled = false;
+    // }
 
-    domEl.setPointerCapture(ev.pointerId);
+    // domEl.setPointerCapture(ev.pointerId);
   }
 
   /** ----- pointermove : 拖拽 & 面对检测 ----- */
   function onPointerMove(ev) {
-    /* ---------- ★★ 滑动阶段的 pointermove ---------- */
-    if (slidingDragging) {
-      toNDC(ev);
-      raycaster.setFromCamera(mouseNDC, ctx.camera);
-      const pos = new THREE.Vector3();
-      raycaster.ray.intersectPlane(dragPlane, pos);
-      if (!pos) return;
+    // /* ---------- ★★ 滑动阶段的 pointermove ---------- */
+    // if (slidingDragging) {
+    //   toNDC(ev);
+    //   raycaster.setFromCamera(mouseNDC, ctx.camera);
+    //   const pos = new THREE.Vector3();
+    //   raycaster.ray.intersectPlane(dragPlane, pos);
+    //   if (!pos) return;
 
-      const delta = pos.clone().sub(dragStart);
-      dragStart.copy(pos);
+    //   const delta = pos.clone().sub(dragStart);
+    //   dragStart.copy(pos);
 
-      const axis = slidingAxis;
-      const step = store.gridStep;
+    //   const axis = slidingAxis;
+    //   const step = store.gridStep;
 
-      /* 只保留该轴位移 */
-      const move = delta[axis];
-      if (Math.abs(move) < 1e-6) return;
+    //   /* 只保留该轴位移 */
+    //   const move = delta[axis];
+    //   if (Math.abs(move) < 1e-6) return;
 
-      /* 先整组平移 */
-      slidingComp.forEach((p) => {
-        const m = ctx.meshMap.get(p);
-        if (m) m.position[axis] += move;
-      });
+    //   /* 先整组平移 */
+    //   slidingComp.forEach((p) => {
+    //     const m = ctx.meshMap.get(p);
+    //     if (m) m.position[axis] += move;
+    //   });
 
-      /* —— 计算中心差值 & 吸附 —— */
-      const meshA0 = ctx.meshMap.get(slidingComp[0]);
-      // const ctrA = new THREE.Box3().setFromObject(meshA0).getCenter(new THREE.Vector3())[axis];
-      // let offset = ctrA - slidingCenterB;                // A 相对 B 的位移
+    //   /* —— 计算中心差值 & 吸附 —— */
+    //   const meshA0 = ctx.meshMap.get(slidingComp[0]);
+    //   // const ctrA = new THREE.Box3().setFromObject(meshA0).getCenter(new THREE.Vector3())[axis];
+    //   // let offset = ctrA - slidingCenterB;                // A 相对 B 的位移
 
-      // /* a) 端点 / 中点吸附  —— 优先级最高 */
-      // const halfA = lenAaxis * 0.5;
-      // const halfB = lenBaxis * 0.5;
-      // const targets = [-halfB + halfA, 0, halfB - halfA];  // Bottom / Center / Top
-      // let snapped = null;
-      // for (const t of targets) {
-      //     if (Math.abs(offset - t) < SNAP_T()) { snapped = t; break; }
-      // }
+    //   // /* a) 端点 / 中点吸附  —— 优先级最高 */
+    //   // const halfA = lenAaxis * 0.5;
+    //   // const halfB = lenBaxis * 0.5;
+    //   // const targets = [-halfB + halfA, 0, halfB - halfA];  // Bottom / Center / Top
+    //   // let snapped = null;
+    //   // for (const t of targets) {
+    //   //     if (Math.abs(offset - t) < SNAP_T()) { snapped = t; break; }
+    //   // }
 
-      // /* b) 网格吸附  */
-      // if (snapped === null) {
-      //     const g = gridSnap(offset, step);
-      //     if (Math.abs(offset - g) < SNAP_T()) snapped = g;
-      // }
+    //   // /* b) 网格吸附  */
+    //   // if (snapped === null) {
+    //   //     const g = gridSnap(offset, step);
+    //   //     if (Math.abs(offset - g) < SNAP_T()) snapped = g;
+    //   // }
 
-      // /* c) 若需吸附 → 计算补偿位移 */
-      // if (snapped !== null && Math.abs(snapped - offset) > 1e-6) {
-      //     const need = snapped - offset;
-      //     slidingComp.forEach(p => {
-      //         const m = ctx.meshMap.get(p);
-      //         if (m) m.position[axis] += need;
-      //     });
-      //     offset = snapped;
-      //     /* 关键：更新 dragStart，让下一帧以新基准计算，防抖动 */
-      //     dragStart[axis] += need;
-      // }
-      const ctrA = new THREE.Box3()
-        .setFromObject(meshA0)
-        .getCenter(new THREE.Vector3())[axis];
-      let offset = ctrA - slidingCenterB; // A 相对 B 的位移
+    //   // /* c) 若需吸附 → 计算补偿位移 */
+    //   // if (snapped !== null && Math.abs(snapped - offset) > 1e-6) {
+    //   //     const need = snapped - offset;
+    //   //     slidingComp.forEach(p => {
+    //   //         const m = ctx.meshMap.get(p);
+    //   //         if (m) m.position[axis] += need;
+    //   //     });
+    //   //     offset = snapped;
+    //   //     /* 关键：更新 dragStart，让下一帧以新基准计算，防抖动 */
+    //   //     dragStart[axis] += need;
+    //   // }
+    //   const ctrA = new THREE.Box3()
+    //     .setFromObject(meshA0)
+    //     .getCenter(new THREE.Vector3())[axis];
+    //   let offset = ctrA - slidingCenterB; // A 相对 B 的位移
 
-      /* ---------- A) 限制在合法区间 ---------- */
-      const halfA = lenAaxis * 0.5;
-      const halfB = lenBaxis * 0.5;
-      let minOff = -halfB + halfA;
-      let maxOff = halfB - halfA;
-      /* 若 A 比 B 大，则无法滑动，夹为 0 */
-      if (minOff > maxOff) minOff = maxOff = 0;
+    //   /* ---------- A) 限制在合法区间 ---------- */
+    //   const halfA = lenAaxis * 0.5;
+    //   const halfB = lenBaxis * 0.5;
+    //   let minOff = -halfB + halfA;
+    //   let maxOff = halfB - halfA;
+    //   /* 若 A 比 B 大，则无法滑动，夹为 0 */
+    //   if (minOff > maxOff) minOff = maxOff = 0;
 
-      if (offset < minOff) offset = minOff;
-      if (offset > maxOff) offset = maxOff;
+    //   if (offset < minOff) offset = minOff;
+    //   if (offset > maxOff) offset = maxOff;
 
-      /* ---------- B) 端点 / 中点 / 网格吸附 ---------- */
-      const snapTargets = [minOff, 0, maxOff]; // Bottom / Center / Top
-      let snapped = null;
-      for (const t of snapTargets) {
-        if (Math.abs(offset - t) < SNAP_T()) {
-          snapped = t;
-          break;
-        }
-      }
-      if (snapped === null) {
-        const g = gridSnap(offset, step);
-        if (Math.abs(offset - g) < SNAP_T()) snapped = g;
-      }
-      if (snapped !== null)
-        offset = THREE.MathUtils.clamp(snapped, minOff, maxOff);
+    //   /* ---------- B) 端点 / 中点 / 网格吸附 ---------- */
+    //   const snapTargets = [minOff, 0, maxOff]; // Bottom / Center / Top
+    //   let snapped = null;
+    //   for (const t of snapTargets) {
+    //     if (Math.abs(offset - t) < SNAP_T()) {
+    //       snapped = t;
+    //       break;
+    //     }
+    //   }
+    //   if (snapped === null) {
+    //     const g = gridSnap(offset, step);
+    //     if (Math.abs(offset - g) < SNAP_T()) snapped = g;
+    //   }
+    //   if (snapped !== null)
+    //     offset = THREE.MathUtils.clamp(snapped, minOff, maxOff);
 
-      /* ---------- C) 把 compMove 校正到 offset ---------- */
-      const need = offset - (ctrA - slidingCenterB);
-      if (Math.abs(need) > 1e-6) {
-        slidingComp.forEach((p) => {
-          const m = ctx.meshMap.get(p);
-          if (m) m.position[axis] += need;
-        });
-        /* 更新 dragStart —— 防止下一帧累积误差 / 抖动 */
-        dragStart[axis] += need;
-      }
+    //   /* ---------- C) 把 compMove 校正到 offset ---------- */
+    //   const need = offset - (ctrA - slidingCenterB);
+    //   if (Math.abs(need) > 1e-6) {
+    //     slidingComp.forEach((p) => {
+    //       const m = ctx.meshMap.get(p);
+    //       if (m) m.position[axis] += need;
+    //     });
+    //     /* 更新 dragStart —— 防止下一帧累积误差 / 抖动 */
+    //     dragStart[axis] += need;
+    //   }
 
-      /* ---------- D) ratio 实时刷新 ---------- */
-      const axisRange = lenBaxis - lenAaxis; // 有效可移动长度
-      const ratioDec = axisRange < 1e-3 ? 0 : (offset - minOff) / axisRange; // 0 at Bottom, 1 at Top
-      slidingConn.ratio = dec2frac(ratioDec);
-      /* —— 实时写 ratio，右侧面板自动刷新 —— */
-      return;
-    }
+    //   /* ---------- D) ratio 实时刷新 ---------- */
+    //   const axisRange = lenBaxis - lenAaxis; // 有效可移动长度
+    //   const ratioDec = axisRange < 1e-3 ? 0 : (offset - minOff) / axisRange; // 0 at Bottom, 1 at Top
+    //   slidingConn.ratio = dec2frac(ratioDec);
+    //   /* —— 实时写 ratio，右侧面板自动刷新 —— */
+    //   return;
+    // }
 
     /* ---------- ★★ 第一段拖拽检测 ---------- */
     if (!dragging) return;
@@ -411,22 +516,22 @@ export function initSnapMode(ctx) {
   /** ----- pointerup : 若有候选则建立连接 ----- */
   function onPointerUp(ev) {
     /* ---------- ★★ 第二段滑动结束 ---------- */
-    if (slidingDragging) {
-      slidingDragging = false;
-      domEl.releasePointerCapture(ev.pointerId);
+    // if (slidingDragging) {
+    //   slidingDragging = false;
+    //   domEl.releasePointerCapture(ev.pointerId);
 
-      // /* 最终提交（ratio 已在 pointermove 中写入） */
-      // store.updateConnections(
-      //     [...store.connections.filter(c => c !== slidingConn), slidingConn]
-      // );
-      /* 最终提交：拷贝当前数组即可（ratio 已写入） */
-      store.updateConnections([...store.connections]);
+    //   // /* 最终提交（ratio 已在 pointermove 中写入） */
+    //   // store.updateConnections(
+    //   //     [...store.connections.filter(c => c !== slidingConn), slidingConn]
+    //   // );
+    //   /* 最终提交：拷贝当前数组即可（ratio 已写入） */
+    //   store.updateConnections([...store.connections]);
 
-      clearHelpers();
-      ctx.highlightPath([]);
-      restoreOrbit();
-      return;
-    }
+    //   clearHelpers();
+    //   ctx.highlightPath([]);
+    //   restoreOrbit();
+    //   return;
+    // }
 
     /* ---------- ★★ 第一段拖拽结束 ---------- */
     if (!dragging) return;
@@ -575,6 +680,243 @@ export function initSnapMode(ctx) {
     clearHelpers();
     // if (ctx.orbit) ctx.orbit.enabled = orbitPrevEnabled;
     restoreOrbit(); // ★ 切模式必开启旋转
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  updateCandidate  —— 选中第一面对后，轴向拖动实时检测最佳吸附面
+   * ------------------------------------------------------------------ */
+  function updateCandidate() {
+    clearHelpers();
+    refreshCompFaceBBox();
+
+    const snapT = store.snapThreshold;
+    let best = null,
+      bestDist = snapT;
+
+    compMove.forEach((pathStr) => {
+      const mA = ctx.meshMap.get(pathStr);
+      if (!mA) return;
+      const facesA = mA.userData.faceBBox;
+
+      ctx.meshMap.forEach((mB, pB) => {
+        if (compMove.includes(pB) || !mB.visible) return;
+        mB.updateMatrixWorld(true);
+        mB.userData.faceBBox = getFaceBBox(mB);
+        const facesB = mB.userData.faceBBox;
+
+        const pairs = getParallelFaces(facesA, facesB, snapT);
+        pairs.forEach((pair) => {
+          if (pair.dist < bestDist) {
+            best = { ...pair, meshA: mA, meshB: mB };
+            bestDist = pair.dist;
+          }
+        });
+      });
+    });
+
+    if (best) {
+      candidate = best;
+      addRectHelper(best.faceA, 0x00ff00); // 绿
+      addRectHelper(best.faceB, 0xff8800); // 橙
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  updateSliding —— 二段滑动时沿单轴实时吸附 & ratio 更新
+   * ------------------------------------------------------------------ */
+  function updateSliding() {
+    if (!slidingReady || !slidingAxis || !slidingComp.length) return;
+
+    const axis = slidingAxis;
+    const step = store.gridStep;
+    const meshA = ctx.meshMap.get(slidingComp[0]);
+    if (!meshA) return;
+
+    /* A 相对 B 的中心偏移 */
+    const ctrA = new THREE.Box3()
+      .setFromObject(meshA)
+      .getCenter(new THREE.Vector3())[axis];
+    let offset = ctrA - slidingCenterB;
+
+    /* --------- 限制 + 端点/中点/网格吸附 (代码与原 pointermove 相同) ---------- */
+    const halfA = lenAaxis * 0.5;
+    const halfB = lenBaxis * 0.5;
+    let minOff = -halfB + halfA;
+    let maxOff = halfB - halfA;
+    if (minOff > maxOff) minOff = maxOff = 0;
+
+    const snapTargets = [minOff, 0, maxOff];
+    let snapped = null;
+    for (const t of snapTargets) {
+      if (Math.abs(offset - t) < SNAP_T()) {
+        snapped = t;
+        break;
+      }
+    }
+    if (snapped === null) {
+      const g = gridSnap(offset, step);
+      if (Math.abs(offset - g) < SNAP_T()) snapped = g;
+    }
+    if (snapped !== null)
+      offset = THREE.MathUtils.clamp(snapped, minOff, maxOff);
+
+    /* --------- 若需补偿位移，则整组同步 ---------- */
+    const need = offset - (ctrA - slidingCenterB);
+    if (Math.abs(need) > 1e-6) {
+      adjusting = true; // 锁递归
+      slidingComp.forEach((p) => {
+        const m = ctx.meshMap.get(p);
+        if (m) m.position[axis] += need;
+      });
+      adjusting = false;
+    }
+
+    /* --------- ratio 更新到连接对象 ---------- */
+    const axisRange = lenBaxis - lenAaxis;
+    const ratioDec = axisRange < 1e-3 ? 0 : (offset - minOff) / axisRange;
+    slidingConn.ratio = dec2frac(ratioDec);
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  finalizeCandidate()
+   *  ---------------------------------------------------------------
+   *  在 gizmo 轴向拖动 **结束** 时调用，功能与旧 pointerup
+   *  逻辑完全一致：把 compMove 贴到目标面 → 自动平面对齐 →
+   *  若还剩 1 自由轴则进入二段滑动，否则直接写入连接。
+   * ------------------------------------------------------------------ */
+  function finalizeCandidate() {
+    if (!candidate) return;
+
+    /* === 1. 让 compMove 整体平移到目标面 ========================== */
+    compMove.forEach((p) => {
+      const m = ctx.meshMap.get(p);
+      if (m) m.position.add(candidate.delta);
+    });
+
+    /* === 2. 同平面内自动对齐 (uDir / vDir) ======================== */
+    const EPS = 1; // mm
+    const deltaPlane = new THREE.Vector3();
+
+    const centerA = candidate.faceA.center.clone().add(candidate.delta);
+    const centerB = candidate.faceB.center.clone();
+
+    const { uDir, vDir, uLen, vLen } = candidate.faceA;
+    const sameU = Math.abs(uLen - candidate.faceB.uLen) < EPS;
+    const sameV = Math.abs(vLen - candidate.faceB.vLen) < EPS;
+
+    if (sameU) {
+      const du = centerB.clone().sub(centerA).dot(uDir);
+      deltaPlane.addScaledVector(uDir, du);
+    }
+    if (sameV) {
+      const dv = centerB.clone().sub(centerA).dot(vDir);
+      deltaPlane.addScaledVector(vDir, dv);
+    }
+
+    if (deltaPlane.lengthSq() > 1e-6) {
+      compMove.forEach((p) => {
+        const m = ctx.meshMap.get(p);
+        if (m) m.position.add(deltaPlane);
+      });
+    }
+
+    /* === 3. 网格吸附 & 决定是否进入二段滑动 ======================= */
+    let axis = candidate.commonAxis; // 可能为 null（已经全对齐）
+
+    if (axis) {
+      const step = store.gridStep;
+      const centerA2 = candidate.faceA.center
+        .clone()
+        .add(candidate.delta)
+        .add(deltaPlane);
+      const centerB2 = candidate.faceB.center.clone();
+
+      let offset = centerA2[axis] - centerB2[axis];
+      const snap = gridSnap(offset, step);
+      const delta = snap - offset;
+
+      if (Math.abs(delta) > 1e-3) {
+        compMove.forEach((p) => {
+          const m = ctx.meshMap.get(p);
+          if (m) m.position[axis] += delta;
+        });
+        offset = snap; // 更新为吸附后值
+      }
+
+      /* 此时仍剩 1 自由轴 —— 比例 ratio 延后到二段滑动实时更新 */
+    }
+
+    /* === 4. 生成连接对象 ========================================= */
+    const objA = candidate.meshA.userData.pathArr.at(-1);
+    const objB = candidate.meshB.userData.pathArr.at(-1);
+
+    const connObj = {
+      [objA]: "",
+      [objB]: "",
+      faceA: candidate.faceA.name,
+      faceB: candidate.faceB.name,
+      axis: axis, // null ⇢ 已完全对齐
+      ratio: axis ? "0" : null,
+    };
+
+    /* ---------- 4‑A. 剩 1 自由轴 → 进入二段滑动 ------------------ */
+    if (axis) {
+      slidingReady = true;
+      slidingAxis = axis;
+      slidingConn = connObj;
+      slidingComp = [...compMove];
+      slidingCenterB = candidate.faceB.center[axis];
+      faceBLenU = candidate.faceB.uLen;
+      faceBLenV = candidate.faceB.vLen;
+
+      /* 把新连接推入数组但 skipUndo=true（快照已拍） */
+      //   store.updateConnections([...store.connections, connObj], true);
+      store.updateConnections(
+        withUniqueConn(store.connections, objA, objB, connObj),
+        true // skipUndo，快照已拍
+      );
+
+      /* 让 slidingConn 引用数组里真正那一份对象 */
+      slidingConn = store.connections.find((c) => {
+        const k = Object.keys(c);
+        return k.includes(objA) && k.includes(objB);
+      });
+
+      /* 记录 A、B 在滑动轴上的尺寸，供 updateSliding() 计算比例 */
+      const vec = new THREE.Vector3();
+      const meshA0 = ctx.meshMap.get(slidingComp[0]);
+      const boxA = new THREE.Box3().setFromObject(meshA0).getSize(vec);
+      lenAaxis = vec[slidingAxis];
+
+      const boxB = new THREE.Box3().setFromObject(candidate.meshB).getSize(vec);
+      lenBaxis = vec[slidingAxis];
+
+      /* ---------- FIX‑BEGIN : Gizmo 仅显示自由轴 ---------- */
+      if (ctx.transformCtrls) {
+        const t = ctx.transformCtrls;
+        t.attach(candidate.meshA); // 确保绑定
+        t.showX = axis === "x";
+        t.showY = axis === "y";
+        t.showZ = axis === "z";
+        t.showXY = t.showYZ = t.showXZ = t.showXYZ = false;
+        t.setMode("translate");
+        t.update();
+      }
+      /* ---------- FIX‑END --------------------------------- */
+
+      restoreOrbit(); // 允许用户旋转视图
+      return; // 重要：保留 helper + 高亮
+    }
+
+    /* ---------- 4‑B. 没自由轴 → 一次性完成 ----------------------- */
+    // store.updateConnections([...store.connections, connObj]);
+    store.updateConnections(
+      withUniqueConn(store.connections, objA, objB, connObj)
+    );
+
+    clearHelpers();
+    ctx.highlightPath([]);
+    restoreOrbit();
   }
 
   /* === 挂载事件 & 公共 API ======================== */
