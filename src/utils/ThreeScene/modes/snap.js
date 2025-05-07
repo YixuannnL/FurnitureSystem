@@ -101,6 +101,11 @@ export function initSnapMode(ctx) {
     return dec.toFixed(3);
   }
 
+  /* 让下一帧 objectChange 的 delta = 0 */
+  function syncPrev(mesh) {
+    if (ctx.prevPosRef) ctx.prevPosRef.copy(mesh.position);
+  }
+
   function restoreOrbit() {
     if (ctx.orbit) ctx.orbit.enabled = true;
   }
@@ -607,6 +612,7 @@ export function initSnapMode(ctx) {
           const m = ctx.meshMap.get(p);
           if (m) m.position[axis] += deltaSnap;
         });
+        syncPrev(candidate.meshA); // ← 新增
       }
 
       /* 计算比例 offset / axisLen */
@@ -769,6 +775,7 @@ export function initSnapMode(ctx) {
         if (m) m.position[axis] += need;
       });
       adjusting = false;
+      syncPrev(meshA); // ← 新增：基准对齐
     }
 
     /* --------- ratio 更新到连接对象 ---------- */
@@ -792,6 +799,7 @@ export function initSnapMode(ctx) {
       const m = ctx.meshMap.get(p);
       if (m) m.position.add(candidate.delta);
     });
+    syncPrev(candidate.meshA); // ← 新增
 
     /* === 2. 同平面内自动对齐 (uDir / vDir) ======================== */
     const EPS = 1; // mm
@@ -818,6 +826,7 @@ export function initSnapMode(ctx) {
         const m = ctx.meshMap.get(p);
         if (m) m.position.add(deltaPlane);
       });
+      syncPrev(candidate.meshA); // ← 新增
     }
 
     /* === 3. 网格吸附 & 决定是否进入二段滑动 ======================= */
@@ -841,6 +850,7 @@ export function initSnapMode(ctx) {
           if (m) m.position[axis] += delta;
         });
         offset = snap; // 更新为吸附后值
+        syncPrev(candidate.meshA); // ← 新增
       }
 
       /* 此时仍剩 1 自由轴 —— 比例 ratio 延后到二段滑动实时更新 */

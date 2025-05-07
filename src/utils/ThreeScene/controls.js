@@ -62,6 +62,7 @@ export function initControls(ctx) {
   ctx.selectedMesh = null; // 当前 gizmo 绑定的 mesh
   ctx.component = []; // 与 selectedMesh 同连通分量（pathStr[]）
   const prevPos = new THREE.Vector3();
+  ctx.prevPosRef = prevPos; // ← 让 snap.js 能同步基准
 
   let scalingOrigDims = null; // XYZ 缩放开始时的尺寸
 
