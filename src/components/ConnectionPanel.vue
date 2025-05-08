@@ -40,8 +40,54 @@
 <script setup>
 import { ref, computed, watch } from "vue";
 import { useSceneStore } from "../store";
+import { findByPath } from "../utils/geometryUtils";
+
+const curNode = computed(() =>
+  findByPath(store.furnitureTree, store.currentNodePath)
+);
+const isLeafNode = computed(() => !!curNode.value?.isLeaf);
 const store = useSceneStore();
-const conns = computed(() => store.connections);
+const conns = computed(() => {
+  /* —— 仅 Step-1 做过滤 —— */
+  if (store.step === 1 && store.currentNodePath.length) {
+    /* ------------ A. 当前节点是 Leaf ------------ */
+    if (isLeafNode.value) {
+      const leafName = store.currentNodePath.at(-1);
+      return store.connections.filter((c) => {
+        const ks = Object.keys(c);
+        return ks.includes(leafName);
+      });
+    }
+
+    /* ------------ B. 当前节点是 Group ------------ */
+    const prefix = store.currentNodePath.join("/");
+    const nameSet = new Set();
+    store.threeCtx?.meshMap?.forEach((_, pathStr) => {
+      if (pathStr.startsWith(prefix)) {
+        nameSet.add(pathStr.split("/").at(-1));
+      }
+    });
+
+    const RESERVED = new Set([
+      "faceA",
+      "faceB",
+      "axis",
+      "ratio",
+      "axisU",
+      "axisV",
+      "ratioU",
+      "ratioV",
+    ]);
+    return store.connections.filter((c) => {
+      const ks = Object.keys(c).filter((k) => !RESERVED.has(k));
+      return ks.length >= 2 && nameSet.has(ks[0]) && nameSet.has(ks[1]);
+    });
+  }
+
+  /* 其它步骤：不做过滤 */
+  return store.connections;
+});
+
 const ratioStrs = ref(
   conns.value.map((c) =>
     c.axis

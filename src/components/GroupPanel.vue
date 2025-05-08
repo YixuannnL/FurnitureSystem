@@ -102,28 +102,6 @@ const localConns = computed(() => {
   });
 });
 
-/* --- 手动增删连接（仍保留原功能） --- */
-// const adding = ref(false);
-// const left = ref("");
-// const right = ref("");
-
-// function add() {
-//   if (!left.value || !right.value) return;
-//   if (left.value === right.value) return;
-//   const exists = store.connections.some((c) => {
-//     const k = keys(c);
-//     return k.includes(left.value) && k.includes(right.value);
-//   });
-//   if (!exists) {
-//     store.updateConnections([
-//       ...store.connections,
-//       { [left.value]: "", [right.value]: "" },
-//     ]);
-//   }
-//   left.value = right.value = "";
-//   adding.value = false;
-// }
-
 function del(idx) {
   const conn = localConns.value[idx];
   const i = store.connections.indexOf(conn);
