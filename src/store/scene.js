@@ -15,6 +15,7 @@ import {
   generateAnchorPoints,
   getFaceBBox,
 } from "../utils/geometryUtils";
+import { assembleAllDrawers } from "../utils/drawerUtils";
 
 export const useSceneStore = defineStore("scene", {
   state: () => ({
@@ -394,8 +395,19 @@ export const useSceneStore = defineStore("scene", {
 
       /* 进入第 1 步：准备自底向上遍历队列 */
       if (n === 1) {
-        // 【进入 Step 1 时先清空所有连接
-        this.updateConnections([], true);
+        /* 【进入 Step-1】
+         *   1) 先清空全部连接
+         *   2) 立即重新组装标准抽屉，恢复其 8 条内部连接
+         */
+        this.updateConnections([], true); // 清空
+        if (this.threeCtx) {
+          assembleAllDrawers(
+            this.furnitureTree,
+            this.threeCtx.meshMap,
+            this.threeCtx.removeMesh, // 回调可安全传入
+            this.threeCtx.addMesh
+          );
+        }
 
         this.groupPaths = collectGroupsBottomUp(this.furnitureTree);
         this.groupIdx = 0;
