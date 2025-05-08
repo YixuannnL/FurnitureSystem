@@ -15,7 +15,7 @@
   <script setup>
   import { onMounted, ref, computed } from "vue";
   import { useSceneStore } from "../store";
-  import { createThreeContext } from "../utils/threeScene";
+  import { createThreeContext } from "../utils/ThreeScene";
   import DescriptionOverlay from "./DescriptionOverlay.vue";
   import StepIndicator from "./StepIndicator.vue";
 
