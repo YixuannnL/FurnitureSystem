@@ -416,49 +416,14 @@ export const useSceneStore = defineStore("scene", {
          *   1) 先清空全部连接
          *   2) 立即重新组装标准抽屉，恢复其 8 条内部连接
          */
-        // this.updateConnections([], true); // 清空
-        // if (this.threeCtx) {
-        //   assembleAllDrawers(
-        //     this.furnitureTree,
-        //     this.threeCtx.meshMap,
-        //     this.threeCtx.removeMesh, // 回调可安全传入
-        //     this.threeCtx.addMesh
-        //   );
-        // }
-        /* ---------- Step-1：只清掉“非抽屉”内部连接 ---------- */
+        this.updateConnections([], true); // 清空
         if (this.threeCtx) {
-          const RESERVED = new Set([
-            "faceA",
-            "faceB",
-            "axis",
-            "ratio",
-            "axisU",
-            "axisV",
-            "ratioU",
-            "ratioV",
-          ]);
-
-          const kept = this.connections.filter((conn) => {
-            /* 提取板件短名 */
-            const names = Object.keys(conn).filter((k) => !RESERVED.has(k));
-            if (names.length < 2) return true; // 异常格式 → 保留
-
-            const pathA = this.threeCtx.nameIndex[names[0]]?.[0];
-            const pathB = this.threeCtx.nameIndex[names[1]]?.[0];
-            if (!pathA || !pathB) return false; // 找不到 → 删除
-
-            /* 不同 group — 保留（是跨组连接） */
-            const grpA = pathA.substring(0, pathA.lastIndexOf("/"));
-            const grpB = pathB.substring(0, pathB.lastIndexOf("/"));
-            if (grpA !== grpB) return true;
-
-            /* 同一 group：若该 group 是抽屉(isAutoDrawer) → 保留 */
-            const node = findByPath(this.furnitureTree, grpA.split("/"));
-            return !!node?.isAutoDrawer; // true=保留，false=删除
-          });
-
-          /* 更新为过滤后的连接集 */
-          this.updateConnections(kept, true); // skipUndo
+          assembleAllDrawers(
+            this.furnitureTree,
+            this.threeCtx.meshMap,
+            this.threeCtx.removeMesh, // 回调可安全传入
+            this.threeCtx.addMesh
+          );
         }
 
         this.groupPaths = collectGroupsBottomUp(this.furnitureTree);
