@@ -55,6 +55,27 @@ export function initSnapMode(ctx) {
     return ax > ay && ax > az ? "x" : ay > az ? "y" : "z";
   }
 
+  /* 将当前中心偏移转为 0-1 比例 */
+  function centerRatio(meshA, meshB, axis) {
+    const vec = new THREE.Vector3();
+    const ctrA = new THREE.Box3()
+      .setFromObject(meshA)
+      .getCenter(new THREE.Vector3())[axis];
+    const ctrB = new THREE.Box3()
+      .setFromObject(meshB)
+      .getCenter(new THREE.Vector3())[axis];
+    const lenA = new THREE.Box3().setFromObject(meshA).getSize(vec)[axis];
+    const lenB = new THREE.Box3().setFromObject(meshB).getSize(vec)[axis];
+
+    const halfA = lenA * 0.5;
+    const halfB = lenB * 0.5;
+    const minOff = -(halfA + halfB); // ratio = 0
+    const axisRange = lenA + lenB; // 总范围
+    const curOff = ctrA - ctrB;
+
+    return THREE.MathUtils.clamp((curOff - minOff) / axisRange, 0, 1);
+  }
+
   /**
    * 在 compMove 内部与全场景可见 Mesh 比较，找到距离最近、
    * 且满足平行&重叠条件的面对 pair。
@@ -208,12 +229,16 @@ export function initSnapMode(ctx) {
         faceA: cand.faceA.name,
         faceB: cand.faceB.name,
         axis,
-        ratio: "0",
+        ratio: dec2frac(centerRatio(cand.meshA, cand.meshB, axis)),
       };
       store.updateConnections(
         withUniqueConn(store.connections, objA, objB, slidingConn),
         true
       );
+      slidingConn = store.connections.find((c) => {
+        const k = Object.keys(c);
+        return k.includes(objA) && k.includes(objB);
+      });
 
       /* gizmo 只留这一根轴 */
       if (ctx.transformCtrls) {
@@ -252,13 +277,20 @@ export function initSnapMode(ctx) {
         faceB: cand.faceB.name,
         axisU: freeAxes[0],
         axisV: freeAxes[1],
-        ratioU: "0",
-        ratioV: "0",
+        ratioU: dec2frac(centerRatio(cand.meshA, cand.meshB, freeAxes[0])),
+        ratioV: dec2frac(centerRatio(cand.meshA, cand.meshB, freeAxes[1])),
       };
       store.updateConnections(
         withUniqueConn(store.connections, objA, objB, slidingConn),
         true
       );
+      slidingConn = store.connections.find((c) => {
+        const k = Object.keys(c);
+        return (
+          k.includes(cand.meshA.userData.pathArr.at(-1)) &&
+          k.includes(cand.meshB.userData.pathArr.at(-1))
+        );
+      });
 
       /* gizmo 开启这两轴把手 */
       if (ctx.transformCtrls) {
@@ -366,13 +398,6 @@ export function initSnapMode(ctx) {
     mouseNDC.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
-  /** 重新计算 compMove 的 faceBBox（在 XYZ 伸缩等后已刷新 userData） */
-  // function refreshCompFaceBBox() {
-  //     compMove.forEach(p => {
-  //         const m = ctx.meshMap.get(p);
-  //         m?.updateMatrixWorld(true);
-  //     });
-  // }
   function refreshCompFaceBBox() {
     compMove.forEach((p) => {
       const m = ctx.meshMap.get(p);
@@ -679,8 +704,8 @@ export function initSnapMode(ctx) {
       handleAxis(slidingAxes[1], "ratioV");
     }
 
-    /* —— 通知右侧面板刷新 —— */
-    store.updateConnections([...store.connections], true); // skipUndo
+    // /* —— 通知右侧面板刷新 —— */
+    // store.updateConnections([...store.connections], true); // skipUndo
   }
 
   /* ------------------------------------------------------------------ *
