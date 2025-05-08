@@ -173,82 +173,56 @@ export const useSceneStore = defineStore("scene", {
   actions: {
     /* ---------- ratio 编辑后 → 即时移动组件 ---------- */
     applyRatioChange(connObj, oldR, newR) {
-      if (
-        !connObj.axis ||
-        oldR === null ||
-        newR === null ||
-        Math.abs(newR - oldR) < 1e-6
-      )
+      /* 单轴 */
+      if (connObj.axis) {
+        singleAxisResize.call(this, connObj.axis, connObj.ratio);
         return;
-
-      /* 1. 找到 meshA / meshB 的唯一路径（同名取第一条） */
-      const RESERVED = new Set(["faceA", "faceB", "axis", "ratio"]);
-      const names = Object.keys(connObj).filter((k) => !RESERVED.has(k));
-      if (names.length < 2) return;
-      const [nameA, nameB] = names;
-
-      const pathA = this.threeCtx?.nameIndex[nameA]?.[0];
-      const pathB = this.threeCtx?.nameIndex[nameB]?.[0];
-      const meshA = this.threeCtx?.meshMap.get(pathA);
-      const meshB = this.threeCtx?.meshMap.get(pathB);
-      if (!meshA || !meshB) return;
-
-      /* 2. 计算 axis 长度（取 meshB 在该轴方向的尺寸） */
-      const axis = connObj.axis; // 'x' | 'y' | 'z'
-      let axisLen = 0;
-      const dimsB = findByPath(this.furnitureTree, pathB.split("/"))?.dims;
-      if (dimsB) {
-        axisLen =
-          axis === "x"
-            ? dimsB.width
-            : axis === "y"
-            ? dimsB.height
-            : dimsB.depth;
-      } else {
-        /* 退化：用包围盒 */
-        const size = new THREE.Box3()
-          .setFromObject(meshB)
-          .getSize(new THREE.Vector3());
-        axisLen = size[axis];
       }
-      if (axisLen < 1e-3) return;
+      /* 双轴 */
+      if (connObj.axisU && connObj.axisV) {
+        singleAxisResize.call(this, connObj.axisU, connObj.ratioU);
+        singleAxisResize.call(this, connObj.axisV, connObj.ratioV);
+      }
 
-      //   /* 3. 仅平移 meshA（被拖动的板件或其父组） */
-      //   const delta = (newR - oldR) * axisLen;
-      /* 3. 仅平移 meshA：Δ = (newR − oldR) × (lenB − lenA) */
-      //   const lenA = lenAaxis;
-      //   const lenB = lenBaxis;
+      function singleAxisResize(axisKey, ratioVal) {
+        const axis = axisKey;
+        const r = this._parseRatio(ratioVal);
+        if (r === null) return;
 
-      /* 重新计算 lenAaxis / lenBaxis */
-      //   {
-      //     const vec = new THREE.Vector3();
-      //     const boxA = new THREE.Box3().setFromObject(meshA);
-      //     boxA.getSize(vec);
-      //     lenAaxis = vec[axis];
+        const names = Object.keys(connObj).filter(
+          (k) =>
+            ![
+              "faceA",
+              "faceB",
+              "axis",
+              "ratio",
+              "axisU",
+              "axisV",
+              "ratioU",
+              "ratioV",
+            ].includes(k)
+        );
+        if (names.length < 2) return;
+        const [nameA, nameB] = names;
+        const pathA = this.threeCtx?.nameIndex[nameA]?.[0];
+        const pathB = this.threeCtx?.nameIndex[nameB]?.[0];
+        const meshA = this.threeCtx?.meshMap.get(pathA);
+        const meshB = this.threeCtx?.meshMap.get(pathB);
+        if (!meshA || !meshB) return;
 
-      //     const boxB = new THREE.Box3().setFromObject(meshB);
-      //     boxB.getSize(vec);
-      //     lenBaxis = vec[axis];
-      //   }
-      //   const axisRange = lenBaxis - lenAaxis;
-      //   if (axisRange < 1e-3) return;
-
-      //   const delta = (newR - oldR) * axisRange;
-      //   const meshMove = meshA; // 只动 A
-      /* 3. 仅平移 meshA：Δ = (newR − oldR) × (lenB − lenA) */
-      const vec = new THREE.Vector3();
-
-      const lenAaxis = new THREE.Box3().setFromObject(meshA).getSize(vec)[axis];
-      const lenBaxis = new THREE.Box3().setFromObject(meshB).getSize(vec)[axis];
-
-      const axisRange = lenBaxis - lenAaxis;
-      if (axisRange < 1e-3) return; // 无可滑动范围
-
-      const delta = (newR - oldR) * axisRange;
-      const meshMove = meshA; // 只移动 A
-      meshMove.position[axis] += delta;
-      meshMove.updateMatrixWorld(true);
-      meshMove.userData.faceBBox = getFaceBBox(meshMove);
+        /* 计算 Δ 并平移 A */
+        const vec = new THREE.Vector3();
+        const range =
+          new THREE.Box3().setFromObject(meshA).getSize(vec)[axis] +
+          new THREE.Box3().setFromObject(meshB).getSize(vec)[axis];
+        const minOff = -range;
+        const delta =
+          (r - 0) * range -
+          (meshA.position[axis] - meshB.position[axis] + range);
+        meshA.position[axis] += delta;
+        meshA.updateMatrixWorld(true);
+        meshA.userData.faceBBox = getFaceBBox(meshA);
+      }
     },
 
     /* ===== 工具：把  "1/3"  → 0.333 ===== */

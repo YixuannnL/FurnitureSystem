@@ -1,31 +1,3 @@
-/* ────────────────────────────────────────────────────────────────────
- *  modes/snap.js
- *  ------------------------------------------------------------------
- *  “拖拽贴面‑连接”模式（取代旧 anchor‑connect）
- *
- *  ▸ 指令流程
- *      0. pointerdown 选中 meshA 及其连通分量 compMove
- *      1. pointermove 拖拽：
- *          · 按屏幕射线与相机正交面的交点移动 compMove
- *          · 实时检测 “平行 + 距离 < snapThreshold” 的面对
- *          · 命中后用 PlaneHelper 半透明高亮
- *      2. pointerup  (若存在高亮)
- *          · 平移 compMove 让两面重合
- *          · 若两面在 width/height/depth 任一维完全相等 ⇒ 自动对齐
- *          · 否则留下 1 自由轴 → 计算网格吸附 & 比例 ratio
- *          · 记录连接对象并触发 store.updateConnections()
- *
- *  公开 API
- *      ctx.resetSnapMode()    // 离开模式时自动调用
- *      ctx.snapPointerMove()  // controls.js 调用（实时拖拽时）
- *      ctx.snapPointerUp()    // controls.js 调用（pointerup）
- *
- *  依赖
- *      • ctx.meshMap / ctx.highlightPath / ctx.findComponent
- *      • faceUtils.js          (平行面检测 / 位移 / 网格吸附 / 比例)
- *      • Pinia useSceneStore   (撤销 & 设置项)
- * ──────────────────────────────────────────────────────────────────── */
-
 import * as THREE from "three";
 import { useSceneStore } from "../../../store";
 import { getParallelFaces, gridSnap, ratioFromOffset } from "../../faceUtils";
@@ -68,11 +40,10 @@ export function initSnapMode(ctx) {
   /* ---------- ★★  二段式滑动阶段状态 ---------- */
   let slidingReady = false; // 已经贴面、等待第二次拖动
   let slidingAxis = null; // 'x'|'y'|'z'
+  let slidingAxes = [];
   let slidingConn = null; // 预生成的连接对象（实时更新 ratio）
   let slidingComp = []; // compMove 列表
   let slidingCenterB = 0; // faceB.center[axis]，常数
-  let faceBLenU = 0,
-    faceBLenV = 0; // 供顶/底/中吸附
   let lenAaxis = 0,
     lenBaxis = 0; // 两物体在滑动轴方向的尺寸
   let slidingDragging = false; // 第二段拖拽标记
@@ -171,77 +142,73 @@ export function initSnapMode(ctx) {
     }
 
     /* ================================================================
-     * 3. 网格吸附 + 判定是否进入二段滑动
+     * 3. 判定剩余自由轴
      * ============================================================= */
-    let axis = cand.commonAxis; // 剩余自由轴 (null = 完全对齐)
+    // helper – 把面内 u/v 向量映射到主轴
+    const axisOfDir = (v) => {
+      const ax = Math.abs(v.x),
+        ay = Math.abs(v.y),
+        az = Math.abs(v.z);
+      return ax > ay && ax > az ? "x" : ay > az ? "y" : "z";
+    };
 
-    if (axis) {
-      const step = store.gridStep;
-      const centerA2 = centerA.clone().add(deltaPlane);
-      const offset = centerA2[axis] - centerB[axis];
+    const freeAxes = [];
+    if (!sameU) freeAxes.push(axisOfDir(cand.faceA.uDir)); // u 轴
+    if (!sameV) freeAxes.push(axisOfDir(cand.faceA.vDir)); // v 轴
 
-      const snapped = gridSnap(offset, step);
-      const deltaSnap = snapped - offset;
-
-      if (Math.abs(deltaSnap) > 1e-3) {
-        compMove.forEach((p) => {
-          const m = ctx.meshMap.get(p);
-          if (m) m.position[axis] += deltaSnap;
-        });
-        syncPrev(cand.meshA);
-      }
-    }
-
-    /* ================================================================
-     * 4. 生成连接对象
-     * ============================================================= */
     const objA = cand.meshA.userData.pathArr.at(-1);
     const objB = cand.meshB.userData.pathArr.at(-1);
 
-    const connObj = {
-      [objA]: "",
-      [objB]: "",
-      faceA: cand.faceA.name,
-      faceB: cand.faceB.name,
-      axis,
-      ratio: axis ? "0" : null, // 二段滑动初始 ratio = 0
-    };
-
-    /* ================================================================
-     * 5-A. 仍有 1 自由轴 —— 进入二段滑动
+    /* ===============================================================
+     * 4-A. 无自由轴 —— 直接写入连接
      * ============================================================= */
-    if (axis) {
+    if (freeAxes.length === 0) {
+      const connObj = {
+        [objA]: "",
+        [objB]: "",
+        faceA: cand.faceA.name,
+        faceB: cand.faceB.name,
+      };
+      store.updateConnections(
+        withUniqueConn(store.connections, objA, objB, connObj)
+      );
+      clearHelpers();
+      ctx.highlightPath([]);
+      restoreOrbit();
+      return;
+    }
+
+    /* ===============================================================
+     * 4-B. 单自由轴 —— 进入“一维滑动”阶段
+     * ============================================================= */
+    if (freeAxes.length === 1) {
+      const axis = freeAxes[0];
       slidingReady = true;
       slidingAxis = axis;
-      slidingConn = connObj;
+      slidingAxes = [axis];
       slidingComp = [...compMove];
       slidingCenterB = cand.faceB.center[axis];
-      faceBLenU = cand.faceB.uLen;
-      faceBLenV = cand.faceB.vLen;
 
-      /* 把新连接（去重后）写入数据，但跳过快照，快照已由 pointerDown 拍 */
+      // 长度数据
+      const vec = new THREE.Vector3();
+      lenAaxis = new THREE.Box3().setFromObject(cand.meshA).getSize(vec)[axis];
+      lenBaxis = new THREE.Box3().setFromObject(cand.meshB).getSize(vec)[axis];
+
+      // 连接对象
+      slidingConn = {
+        [objA]: "",
+        [objB]: "",
+        faceA: cand.faceA.name,
+        faceB: cand.faceB.name,
+        axis,
+        ratio: "0",
+      };
       store.updateConnections(
-        withUniqueConn(store.connections, objA, objB, connObj),
-        true // skipUndo
+        withUniqueConn(store.connections, objA, objB, slidingConn),
+        true
       );
 
-      /* 让 slidingConn 指向数组里的那份引用 */
-      slidingConn = store.connections.find((c) => {
-        const k = Object.keys(c);
-        return k.includes(objA) && k.includes(objB);
-      });
-
-      /* 计算 A、B 在滑动轴方向的尺寸 —— 用包围盒 */
-      const vec = new THREE.Vector3();
-      const meshA0 = ctx.meshMap.get(slidingComp[0]);
-      lenAaxis = new THREE.Box3().setFromObject(meshA0).getSize(vec)[
-        slidingAxis
-      ];
-      lenBaxis = new THREE.Box3().setFromObject(cand.meshB).getSize(vec)[
-        slidingAxis
-      ];
-
-      /* ----- Gizmo 仅保留自由轴把手 ----- */
+      /* gizmo 只留这一根轴 */
       if (ctx.transformCtrls) {
         const t = ctx.transformCtrls;
         t.attach(cand.meshA);
@@ -250,23 +217,54 @@ export function initSnapMode(ctx) {
         t.showY = axis === "y";
         t.showZ = axis === "z";
         t.showXY = t.showYZ = t.showXZ = t.showXYZ = false;
-        t.update();
       }
-
-      restoreOrbit(); // 用户可旋转观察
-      return; // 后续滑动由 objectChange 实时处理
+      restoreOrbit();
+      return;
     }
 
-    /* ================================================================
-     * 5-B. 0 自由轴 —— 一步到位，写入连接并收尾
+    /* ===============================================================
+     * 4-C. 双自由轴 —— 进入“平面滑动”阶段
      * ============================================================= */
-    store.updateConnections(
-      withUniqueConn(store.connections, objA, objB, connObj)
-    );
+    if (freeAxes.length === 2) {
+      slidingReady = true;
+      slidingAxes = [...freeAxes]; // [axisU, axisV]
+      slidingComp = [...compMove];
+      slidingCenterB = cand.faceB.center; // 全向量保存
 
-    clearHelpers();
-    ctx.highlightPath([]);
-    restoreOrbit();
+      // 用对角尺寸估算 range（XZ/YZ 平面时亦可）
+      const vec = new THREE.Vector3();
+      lenAaxis = new THREE.Box3().setFromObject(cand.meshA).getSize(vec);
+      lenBaxis = new THREE.Box3().setFromObject(cand.meshB).getSize(vec);
+
+      // 连接对象（ratioU / ratioV）
+      slidingConn = {
+        [objA]: "",
+        [objB]: "",
+        faceA: cand.faceA.name,
+        faceB: cand.faceB.name,
+        axisU: freeAxes[0],
+        axisV: freeAxes[1],
+        ratioU: "0",
+        ratioV: "0",
+      };
+      store.updateConnections(
+        withUniqueConn(store.connections, objA, objB, slidingConn),
+        true
+      );
+
+      /* gizmo 开启这两轴把手 */
+      if (ctx.transformCtrls) {
+        const t = ctx.transformCtrls;
+        t.attach(cand.meshA);
+        t.setMode("translate");
+        t.showX = freeAxes.includes("x");
+        t.showY = freeAxes.includes("y");
+        t.showZ = freeAxes.includes("z");
+        t.showXY = t.showYZ = t.showXZ = t.showXYZ = false;
+      }
+      restoreOrbit();
+      return;
+    }
   }
 
   /* ================================================================
