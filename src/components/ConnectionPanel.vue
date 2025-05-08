@@ -4,6 +4,7 @@
     <div v-for="(c, i) in conns" :key="i" class="conn">
       <code>
         {{ objKeys(c)[0] }} ↔ {{ objKeys(c)[1] }}
+
         <template v-if="c.axis">
           : {{ axisLabel(c.axis) }}_
           <input
@@ -59,24 +60,19 @@ const axisLabel = (a) => {
   return "Depth";
 };
 
-watch(conns, (n) => {
-  /* —— 根据连接对象结构，生成与 ratioStrs 同步的数组 —— */
-  ratioStrs.value = n.map((c) => {
-    /* 单自由轴：直接取 c.ratio */
-    if (c.axis) {
-      return c.ratio ?? "";
-    }
-    /* 双自由轴：返回 {u:…, v:…}，供两个输入框使用 */
-    if (c.axisU && c.axisV) {
-      return {
-        u: c.ratioU ?? "",
-        v: c.ratioV ?? "",
-      };
-    }
-    /* 其它（完全对齐） */
-    return "";
-  });
-});
+watch(
+  conns,
+  (n) => {
+    ratioStrs.value = n.map((c) =>
+      c.axis
+        ? c.ratio ?? ""
+        : c.axisU
+        ? { u: c.ratioU ?? "", v: c.ratioV ?? "" }
+        : ""
+    );
+  },
+  { deep: true }
+);
 
 function del(i) {
   const arr = conns.value.slice();
@@ -85,17 +81,10 @@ function del(i) {
 }
 
 function commit(i, which) {
-  const c = conns.value[i];
   const arr = conns.value.slice();
+  const target = { ...arr[i] }; // 拷贝避免直接改引用
 
-  /* 取旧/新字符串 */
-  const oldRaw =
-    which === "ratio"
-      ? c.ratio ?? "0"
-      : which === "ratioU"
-      ? c.ratioU ?? "0"
-      : c.ratioV ?? "0";
-
+  /* 取新字符串 */
   const newRaw =
     which === "ratio"
       ? ratioStrs.value[i]
@@ -103,6 +92,7 @@ function commit(i, which) {
       ? ratioStrs.value[i].u
       : ratioStrs.value[i].v;
 
+  /* 分数 / 小数 → 十进制 */
   const toDec = (str) => {
     if (typeof str === "number") return str;
     if (/^\d+\/\d+$/.test(str)) {
@@ -113,16 +103,15 @@ function commit(i, which) {
     return isNaN(f) ? null : f;
   };
 
-  const oldR = toDec(oldRaw);
   const newR = toDec(newRaw);
-  if (oldR === null || newR === null || Math.abs(newR - oldR) < 1e-6) return;
+  if (newR === null) return; // 非数字 → 忽略
 
-  /* 写入连接对象 */
-  arr[i] = { ...arr[i], [which]: newRaw };
+  target[which] = newRaw; // 写入新的 ratio / ratioU / ratioV
+  arr[i] = target;
 
   store.recordSnapshot();
-  store.updateConnections(arr, true);
-  store.applyRatioChange(arr[i], oldR, newR);
+  store.updateConnections(arr, true); // true=skipUndo 重用上面的快照
+  store.applyRatioChange(target); // 依据最新 ratio 立即移动
 }
 </script>
 

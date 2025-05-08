@@ -20,8 +20,6 @@ export function initSnapMode(ctx) {
   /** 起点世界坐标 (PointerDown 射线与 dragPlane 交点) */
   let dragStart = new THREE.Vector3();
   let dragPlane = new THREE.Plane(); // 垂直于相机视线
-  let slidingMinOff = 0,
-    slidingMaxOff = 0; // 二段滑动区间
 
   /** 高亮缓存 */
   /** @type {THREE.PlaneHelper[]} */
@@ -48,6 +46,14 @@ export function initSnapMode(ctx) {
     lenBaxis = 0; // 两物体在滑动轴方向的尺寸
   let slidingDragging = false; // 第二段拖拽标记
   const SNAP_T = () => store.snapThreshold;
+  let slidingMeshB = null; // cand.meshB 引用，便于 updateSliding
+
+  function axisOfDir(v) {
+    const ax = Math.abs(v.x),
+      ay = Math.abs(v.y),
+      az = Math.abs(v.z);
+    return ax > ay && ax > az ? "x" : ay > az ? "y" : "z";
+  }
 
   /**
    * 在 compMove 内部与全场景可见 Mesh 比较，找到距离最近、
@@ -188,6 +194,7 @@ export function initSnapMode(ctx) {
       slidingAxes = [axis];
       slidingComp = [...compMove];
       slidingCenterB = cand.faceB.center[axis];
+      slidingMeshB = cand.meshB;
 
       // 长度数据
       const vec = new THREE.Vector3();
@@ -228,6 +235,7 @@ export function initSnapMode(ctx) {
     if (freeAxes.length === 2) {
       slidingReady = true;
       slidingAxes = [...freeAxes]; // [axisU, axisV]
+      slidingMeshB = cand.meshB;
       slidingComp = [...compMove];
       slidingCenterB = cand.faceB.center; // 全向量保存
 
@@ -610,59 +618,69 @@ export function initSnapMode(ctx) {
    *  updateSliding —— 二段滑动时沿单轴实时吸附 & ratio 更新
    * ------------------------------------------------------------------ */
   function updateSliding() {
-    if (!slidingReady || !slidingAxis || !slidingComp.length) return;
+    if (!slidingReady || !slidingComp.length) return;
 
-    const axis = slidingAxis;
-    const step = store.gridStep;
     const meshA = ctx.meshMap.get(slidingComp[0]);
-    if (!meshA) return;
+    if (!meshA || !slidingMeshB) return;
+    const meshB = slidingMeshB;
 
-    /* 当前偏移（中心差值） */
-    const ctrA = new THREE.Box3()
-      .setFromObject(meshA)
-      .getCenter(new THREE.Vector3())[axis];
-    let offset = ctrA - slidingCenterB;
+    /* —— 公用工具：单轴吸附 & ratio 更新 —— */
+    const handleAxis = (axis, ratioKey) => {
+      const vec = new THREE.Vector3();
+      const lenA = new THREE.Box3().setFromObject(meshA).getSize(vec)[axis];
+      const lenB = new THREE.Box3().setFromObject(meshB).getSize(vec)[axis];
+      const halfA = lenA * 0.5,
+        halfB = lenB * 0.5;
+      const minOff = -(halfA + halfB);
+      const maxOff = halfA + halfB;
+      const axisRange = lenA + lenB;
 
-    /* ---------- A) 合法区间 ---------- */
-    const halfA = lenAaxis * 0.5;
-    const halfB = lenBaxis * 0.5;
-    const minOff = -(halfA + halfB);
-    const maxOff = halfA + halfB;
-    if (offset < minOff) offset = minOff;
-    if (offset > maxOff) offset = maxOff;
+      let offset = meshA.position[axis] - meshB.position[axis];
+      offset = THREE.MathUtils.clamp(offset, minOff, maxOff);
 
-    /* ---------- B) 端点 / 中点 / 网格吸附 ---------- */
-    const snapTargets = [minOff, 0, maxOff];
-    let snapped = null;
-    for (const t of snapTargets) {
-      if (Math.abs(offset - t) < SNAP_T()) {
-        snapped = t;
-        break;
+      /* 端点 / 中点 / 网格吸附 */
+      const snapT = SNAP_T();
+      const targets = [minOff, 0, maxOff];
+      let snapped = null;
+      for (const t of targets)
+        if (Math.abs(offset - t) < snapT) {
+          snapped = t;
+          break;
+        }
+      if (snapped === null) {
+        const g = gridSnap(offset, store.gridStep);
+        if (Math.abs(offset - g) < snapT) snapped = g;
       }
-    }
-    if (snapped === null) {
-      const g = gridSnap(offset, step);
-      if (Math.abs(offset - g) < SNAP_T()) snapped = g;
-    }
-    if (snapped !== null)
-      offset = THREE.MathUtils.clamp(snapped, minOff, maxOff);
+      if (snapped !== null) offset = snapped;
 
-    /* ---------- C) 把 compMove 校正到 offset ---------- */
-    const need = offset - (ctrA - slidingCenterB);
-    if (Math.abs(need) > 1e-6) {
-      adjusting = true;
-      slidingComp.forEach((p) => {
-        const m = ctx.meshMap.get(p);
-        if (m) m.position[axis] += need;
-      });
-      adjusting = false;
-      syncPrev(meshA); // 防止下一帧反拖
+      /* 位移补偿 */
+      const need = offset - (meshA.position[axis] - meshB.position[axis]);
+      if (Math.abs(need) > 1e-6) {
+        adjusting = true;
+        slidingComp.forEach((p) => {
+          const mesh = ctx.meshMap.get(p);
+          if (mesh) {
+            mesh.position[axis] += need;
+          }
+        });
+        adjusting = false;
+        syncPrev(meshA);
+      }
+
+      /* ratio 更新 */
+      const dec = (offset - minOff) / axisRange; // 0~1
+      slidingConn[ratioKey] = dec2frac(dec);
+    };
+
+    if (slidingAxes.length === 1) {
+      handleAxis(slidingAxes[0], "ratio");
+    } else {
+      handleAxis(slidingAxes[0], "ratioU");
+      handleAxis(slidingAxes[1], "ratioV");
     }
 
-    /* ---------- D) ratio 实时刷新 ---------- */
-    const axisRange = lenAaxis + lenBaxis; // always >0
-    const ratioDec = (offset - minOff) / axisRange; // ∈[0,1]
-    slidingConn.ratio = dec2frac(ratioDec);
+    /* —— 通知右侧面板刷新 —— */
+    store.updateConnections([...store.connections], true); // skipUndo
   }
 
   /* ------------------------------------------------------------------ *

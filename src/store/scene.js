@@ -172,56 +172,70 @@ export const useSceneStore = defineStore("scene", {
 
   actions: {
     /* ---------- ratio 编辑后 → 即时移动组件 ---------- */
-    applyRatioChange(connObj, oldR, newR) {
-      /* 单轴 */
-      if (connObj.axis) {
-        singleAxisResize.call(this, connObj.axis, connObj.ratio);
-        return;
-      }
-      /* 双轴 */
-      if (connObj.axisU && connObj.axisV) {
-        singleAxisResize.call(this, connObj.axisU, connObj.ratioU);
-        singleAxisResize.call(this, connObj.axisV, connObj.ratioV);
-      }
-
-      function singleAxisResize(axisKey, ratioVal) {
-        const axis = axisKey;
-        const r = this._parseRatio(ratioVal);
+    /* ---------- 连接面板手动编辑后 → 立即移动 meshA ---------- */
+    applyRatioChange(connObj) {
+      /* ===== 帮助函数：在单轴上重算 CA 位置 ===== */
+      const adjustAxis = (axis, ratioKey) => {
+        const r = this._parseRatio(connObj[ratioKey]);
         if (r === null) return;
 
-        const names = Object.keys(connObj).filter(
-          (k) =>
-            ![
-              "faceA",
-              "faceB",
-              "axis",
-              "ratio",
-              "axisU",
-              "axisV",
-              "ratioU",
-              "ratioV",
-            ].includes(k)
+        /* —— 1. 找到 meshA / meshB —— */
+        const RESERVED = new Set([
+          "faceA",
+          "faceB",
+          "axis",
+          "ratio",
+          "axisU",
+          "axisV",
+          "ratioU",
+          "ratioV",
+        ]);
+        const [nameA, nameB] = Object.keys(connObj).filter(
+          (k) => !RESERVED.has(k)
         );
-        if (names.length < 2) return;
-        const [nameA, nameB] = names;
         const pathA = this.threeCtx?.nameIndex[nameA]?.[0];
         const pathB = this.threeCtx?.nameIndex[nameB]?.[0];
         const meshA = this.threeCtx?.meshMap.get(pathA);
         const meshB = this.threeCtx?.meshMap.get(pathB);
         if (!meshA || !meshB) return;
 
-        /* 计算 Δ 并平移 A */
+        /* —— 2. 当前中心-中心 offset（世界坐标） —— */
+        const ctrA = new THREE.Box3()
+          .setFromObject(meshA)
+          .getCenter(new THREE.Vector3());
+        const ctrB = new THREE.Box3()
+          .setFromObject(meshB)
+          .getCenter(new THREE.Vector3());
+        const curOff = ctrA[axis] - ctrB[axis];
+
+        /* —— 3. 目标 offset ← ratio —— */
         const vec = new THREE.Vector3();
-        const range =
-          new THREE.Box3().setFromObject(meshA).getSize(vec)[axis] +
-          new THREE.Box3().setFromObject(meshB).getSize(vec)[axis];
-        const minOff = -range;
-        const delta =
-          (r - 0) * range -
-          (meshA.position[axis] - meshB.position[axis] + range);
+        const lenA = new THREE.Box3().setFromObject(meshA).getSize(vec)[axis];
+        const lenB = new THREE.Box3().setFromObject(meshB).getSize(vec)[axis];
+        const halfA = lenA * 0.5,
+          halfB = lenB * 0.5;
+        const axisRange = lenA + lenB;
+        const minOff = -(halfA + halfB); // ratio = 0
+        const desired = r * axisRange + minOff;
+
+        /* —— 4. 平移 meshA —— */
+        const delta = desired - curOff;
+        if (Math.abs(delta) < 1e-4) return;
         meshA.position[axis] += delta;
         meshA.updateMatrixWorld(true);
         meshA.userData.faceBBox = getFaceBBox(meshA);
+      };
+
+      /* 单轴连接 */
+      if (connObj.axis && "ratio" in connObj) {
+        adjustAxis(connObj.axis, "ratio");
+        return;
+      }
+
+      /* 双轴连接 */
+      if (connObj.axisU && connObj.axisV) {
+        adjustAxis(connObj.axisU, "ratioU");
+        adjustAxis(connObj.axisV, "ratioV");
       }
     },
 
