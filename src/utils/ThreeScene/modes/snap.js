@@ -568,7 +568,7 @@ export function initSnapMode(ctx) {
     if (!slidingReady) return;
 
     /* ① 确保最终连接写回（若用户没拖动自由轴时尚未写入撤销栈） */
-    store.updateConnections([...store.connections]); // 不 skipUndo
+    store.updateConnections([...store.connections], /*skipUndo=*/ true); // 不 skipUndo
 
     /* —— ② 恢复 TransformControls 三轴 —— */
     if (ctx.transformCtrls) {
@@ -593,6 +593,8 @@ export function initSnapMode(ctx) {
     store.clearCurrentSlidingComp();
     pendingConnKey = "";
     undoBaseDepth = null; // 本条连接已确认，重置
+
+    store.endConnectSession(); // 关闭事务
   }
 
   /* ------------------------------------------------------------- *
@@ -626,6 +628,8 @@ export function initSnapMode(ctx) {
     store.clearCurrentSlidingComp?.();
     undoBaseDepth = null; // 清标志
     store.clearHint();
+
+    store.endConnectSession(); // 关闭事务
   }
 
   /* === pointer 事件 ================================================= */
@@ -679,8 +683,22 @@ export function initSnapMode(ctx) {
       [...ctx.meshMap.values()].filter((m) => m.visible),
       false
     );
+
     if (!hits.length) {
-      scheduleConditionalCancel(ev); // 新逻辑：等 pointerup 决定
+      const connecting =
+        slidingReady || ratioAdjustStage || undoBaseDepth !== null;
+
+      if (connecting) {
+        /* 正在连接：等待 pointerup 决定是否取消 */
+        scheduleConditionalCancel(ev);
+      } else {
+        /* ---------- ① 并未处于连接流程 ---------- */
+        /* 清选中 & 高亮，让右侧面板回到子结构全部连接 */
+        ctx.transformCtrls?.detach();
+        ctx.selectedMesh = null;
+        ctx.highlightPath([]);
+        ctx.onSelect?.([]); // ← 关键：把 currentNodePath 复位
+      }
       return;
     }
 
@@ -719,6 +737,7 @@ export function initSnapMode(ctx) {
 
     /* 2-g. 撤销栈快照（一次即可） */
     undoBaseDepth = store.undoMgr.length; // 记录开始前的深度
+    store.startConnectSession(); // 标记事务
     store.recordSnapshot();
   }
 

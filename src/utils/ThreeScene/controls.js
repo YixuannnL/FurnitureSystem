@@ -74,7 +74,10 @@ export function initControls(ctx) {
 
     /* ---------- A) XYZ 伸缩 ---------- */
     if (tc.mode === "scale") {
-      store.recordSnapshot();
+      if (!store.connectSessionActive) {
+        // 连接事务期间跳过
+        store.recordSnapshot();
+      }
       const node = findByPath(
         store.furnitureTree,
         ctx.selectedMesh.userData.pathArr
@@ -85,7 +88,10 @@ export function initControls(ctx) {
 
     /* ---------- B) 拖动 ---------- */
     if (tc.mode === "translate") {
-      store.recordSnapshot(); // 位移只需快照即可
+      if (!store.connectSessionActive) {
+        // 连接事务期间跳过
+        store.recordSnapshot();
+      }
     }
   });
 

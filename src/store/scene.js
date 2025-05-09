@@ -64,6 +64,8 @@ export const useSceneStore = defineStore("scene", {
     /** 右上角提示气泡 */
     hintMessage: "", // 为空 = 不显示
     showHint: true, // 用户可以隐藏
+    connectSessionActive: false, // 是否处于连接事务
+    _connectSnapshotTaken: false, // 该事务是否已拍首帧
   }),
 
   getters: {
@@ -180,6 +182,15 @@ export const useSceneStore = defineStore("scene", {
   },
 
   actions: {
+    startConnectSession() {
+      this.connectSessionActive = true;
+      this._connectSnapshotTaken = false;
+    },
+    endConnectSession() {
+      this.connectSessionActive = false;
+      this._connectSnapshotTaken = false;
+    },
+
     setHint(msg) {
       // 赋新提示文字
       this.hintMessage = msg;
@@ -304,6 +315,13 @@ export const useSceneStore = defineStore("scene", {
     /* ===== 快照：仅 Step-1 / Step-2 记录 ===== */
     recordSnapshot() {
       if (!(this.step === 1 || this.step === 2)) return;
+
+      /* ---- 连接事务：仅首次入栈 ---- */
+      if (this.connectSessionActive) {
+        if (this._connectSnapshotTaken) return; // 后续调用全部跳过
+        this._connectSnapshotTaken = true;
+      }
+
       const snap = {
         furnitureTree: JSON.parse(JSON.stringify(this.furnitureTree)),
         connections: JSON.parse(JSON.stringify(this.connections)),
