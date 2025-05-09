@@ -175,6 +175,7 @@ export const useSceneStore = defineStore("scene", {
     /* ---------- ratio 编辑后 → 即时移动组件 ---------- */
     /* ---------- 连接面板手动编辑后 → 立即移动 meshA ---------- */
     applyRatioChange(connObj) {
+      //   console.log("111graph:", ctx.graph);
       /* ===== 帮助函数：在单轴上重算 CA 位置 ===== */
       const adjustAxis = (axis, ratioKey) => {
         const r = this._parseRatio(connObj[ratioKey]);
@@ -230,11 +231,13 @@ export const useSceneStore = defineStore("scene", {
         if (Math.abs(delta) < 1e-4) return;
 
         /* 找到 meshA 所在连通分量 (pathStr[]) */
+        console.log("BEGIN!");
         const compPaths = this.threeCtx?.findComponent(pathA) ?? [pathA];
+        console.log("compPaths, pathA:", compPaths, pathA);
 
         compPaths.forEach((p) => {
           /* 若把 meshB 固定不动，可排除 pathB；此处按需求让整连通分量跟随 */
-          if (p === pathB) return; // 👉 若你希望 B 不动则保留，否则删除此行
+          if (p === pathB) return; // 若希望 B 不动则保留，否则删除此行
           const m = this.threeCtx.meshMap.get(p);
           if (m) {
             m.position[axis] += delta;

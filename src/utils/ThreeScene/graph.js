@@ -89,6 +89,7 @@ export function initGraph(ctx) {
    * @returns {string[]}  pathStr 列表（包含 root 本身）
    */
   function findComponent(rootPathStr) {
+    // console.log("HERE:", rootPathStr);
     const visited = new Set();
     const comp = [];
     const queue = [rootPathStr];
@@ -99,6 +100,7 @@ export function initGraph(ctx) {
       visited.add(p);
       comp.push(p);
       graph.get(p)?.forEach((nbr) => queue.push(nbr));
+      //   console.log("graph:", graph);
     }
     return comp;
   }
