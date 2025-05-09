@@ -79,6 +79,32 @@ export function initSnapMode(ctx) {
     return ax > ay && ax > az ? "x" : ay > az ? "y" : "z";
   }
 
+  /* ---- 单击-空白判定阈 ---- */
+  const CLICK_DIST = 6; // px，与 controls.js 一致
+
+  /* ------------------------------------------------------------------ *
+   *  若是“点一下空白” ⇒ 取消本次连接
+   *  若是“在空白拖动”   ⇒ 仅视角旋转，不取消
+   * ------------------------------------------------------------------ */
+  function scheduleConditionalCancel(ev) {
+    /* 1) 只有正在连接时才需要撤销判断 */
+    const connecting =
+      slidingReady || ratioAdjustStage || undoBaseDepth !== null;
+    if (!connecting) return;
+
+    const sx = ev.clientX,
+      sy = ev.clientY;
+    function onUp(e) {
+      window.removeEventListener("pointerup", onUp);
+      const dx = e.clientX - sx,
+        dy = e.clientY - sy;
+      if (dx * dx + dy * dy < CLICK_DIST * CLICK_DIST) {
+        cancelCurrentConnection(); // 真·单击空白
+      }
+    }
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
   /* 将当前中心偏移转为 0-1 比例 */
   function centerRatio(meshA, meshB, axis) {
     const vec = new THREE.Vector3();
@@ -273,6 +299,11 @@ export function initSnapMode(ctx) {
         return k.includes(objA) && k.includes(objB);
       });
 
+      /* —— 标记“待确认”：立即显示确认按钮 —— */
+      pendingConnKey = pairKey(slidingConn);
+      store.setPendingConnectionKey(pendingConnKey);
+      store.setCurrentSlidingComp(slidingComp);
+
       /* gizmo 只留这一根轴 */
       if (ctx.transformCtrls) {
         const t = ctx.transformCtrls;
@@ -333,6 +364,11 @@ export function initSnapMode(ctx) {
           k.includes(cand.meshB.userData.pathArr.at(-1))
         );
       });
+
+      /* —— 标记“待确认”：立即显示确认按钮 —— */
+      pendingConnKey = pairKey(slidingConn);
+      store.setPendingConnectionKey(pendingConnKey);
+      store.setCurrentSlidingComp(slidingComp);
 
       /* gizmo 开启这两轴把手 */
       if (ctx.transformCtrls) {
@@ -476,10 +512,6 @@ export function initSnapMode(ctx) {
             `这条连接就完成啦！`
         );
 
-        pendingConnKey = pairKey(slidingConn);
-        store.setPendingConnectionKey(pendingConnKey);
-        store.setCurrentSlidingComp(slidingComp);
-
         /* 2. 结束 gizmo 拖拽，但保持高亮 / 面框可视，让用户对照 */
         ctx.transformCtrls.detach();
         ctx.selectedMesh = null;
@@ -532,24 +564,35 @@ export function initSnapMode(ctx) {
   });
 
   function finalizePendingConnection() {
-    if (!ratioAdjustStage) return;
+    // if (!ratioAdjustStage) return;
+    if (!slidingReady) return;
 
-    /* —— ① 恢复 TransformControls 三轴 —— */
+    /* ① 确保最终连接写回（若用户没拖动自由轴时尚未写入撤销栈） */
+    store.updateConnections([...store.connections]); // 不 skipUndo
+
+    /* —— ② 恢复 TransformControls 三轴 —— */
     if (ctx.transformCtrls) {
       const t = ctx.transformCtrls;
+      t.detach();
       t.showX = t.showY = t.showZ = true; // 主轴
       t.showXY = t.showYZ = t.showXZ = false; // 平面
       t.showXYZ = false; // 中心
     }
+    ctx.selectedMesh = null;
 
+    /* ③ 清 UI 辅助线 / 高亮 / 提示 */
     clearHelpers();
     ctx.highlightPath([]);
+    restoreOrbit();
+    store.clearHint();
+
+    /* ④ 清状态标志 */
     ratioAdjustStage = false;
     slidingReady = false;
     store.clearPendingConnectionKey();
     store.clearCurrentSlidingComp();
+    pendingConnKey = "";
     undoBaseDepth = null; // 本条连接已确认，重置
-    store.clearHint();
   }
 
   /* ------------------------------------------------------------- *
@@ -624,11 +667,7 @@ export function initSnapMode(ctx) {
         domEl.setPointerCapture(ev.pointerId);
         return;
       }
-      /* 1-c. 没点到组件 → 取消二段滑动 */
-      //   clearHelpers();
-      //   ctx.highlightPath([]);
-      //   restoreOrbit();
-      cancelCurrentConnection();
+      scheduleConditionalCancel(ev);
       return;
     }
 
@@ -641,7 +680,7 @@ export function initSnapMode(ctx) {
       false
     );
     if (!hits.length) {
-      cancelCurrentConnection(); // 恢复现场
+      scheduleConditionalCancel(ev); // 新逻辑：等 pointerup 决定
       return;
     }
 
@@ -816,9 +855,6 @@ export function initSnapMode(ctx) {
       handleAxis(slidingAxes[0], "ratioU");
       handleAxis(slidingAxes[1], "ratioV");
     }
-
-    // /* —— 通知右侧面板刷新 —— */
-    // store.updateConnections([...store.connections], true); // skipUndo
   }
 
   /* ------------------------------------------------------------------ *
