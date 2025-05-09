@@ -60,6 +60,10 @@ export const useSceneStore = defineStore("scene", {
     pendingConnKey: "",
     /** 第三段中需要跟随微调的 pathStr[]，空数组 = 只调 meshA */
     currentSlidingComp: [],
+
+    /** 右上角提示气泡 */
+    hintMessage: "", // 为空 = 不显示
+    showHint: true, // 用户可以隐藏
   }),
 
   getters: {
@@ -176,6 +180,20 @@ export const useSceneStore = defineStore("scene", {
   },
 
   actions: {
+    setHint(msg) {
+      // 赋新提示文字
+      this.hintMessage = msg;
+      if (msg) this.showHint = true; // 有新内容时自动显示
+    },
+    clearHint() {
+      // 清空
+      this.hintMessage = "";
+    },
+    toggleHint() {
+      // 用户点击 ×
+      this.showHint = !this.showHint;
+    },
+
     setCurrentSlidingComp(list) {
       this.currentSlidingComp = list;
     },

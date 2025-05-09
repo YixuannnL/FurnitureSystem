@@ -70,6 +70,8 @@ export function initSnapMode(ctx) {
   const SNAP_T = () => store.snapThreshold;
   let slidingMeshB = null; // cand.meshB 引用，便于 updateSliding
 
+  const AXIS_NAME = { x: "宽度", y: "高度", z: "深度" };
+
   function axisOfDir(v) {
     const ax = Math.abs(v.x),
       ay = Math.abs(v.y),
@@ -239,6 +241,15 @@ export function initSnapMode(ctx) {
       slidingCenterB = cand.faceB.center[axis];
       slidingMeshB = cand.meshB;
 
+      const axisText =
+        freeAxes.length === 1
+          ? AXIS_NAME[freeAxes[0]]
+          : `${AXIS_NAME[freeAxes[0]]}/${AXIS_NAME[freeAxes[1]]}`;
+      store.setHint(
+        `${meshA.name} 可以沿着 ${axisText} 方向拖动，` +
+          `把它移到你认为合适的位置吧。`
+      );
+
       // 长度数据
       const vec = new THREE.Vector3();
       lenAaxis = new THREE.Box3().setFromObject(cand.meshA).getSize(vec)[axis];
@@ -285,6 +296,15 @@ export function initSnapMode(ctx) {
       slidingMeshB = cand.meshB;
       slidingComp = [...compMove];
       slidingCenterB = cand.faceB.center; // 全向量保存
+
+      const axisText =
+        freeAxes.length === 1
+          ? AXIS_NAME[freeAxes[0]]
+          : `${AXIS_NAME[freeAxes[0]]}/${AXIS_NAME[freeAxes[1]]}`;
+      store.setHint(
+        `${meshA.name} 可以沿着 ${axisText} 方向拖动，` +
+          `把它移到你认为合适的位置吧。`
+      );
 
       // 用对角尺寸估算 range（XZ/YZ 平面时亦可）
       const vec = new THREE.Vector3();
@@ -450,6 +470,12 @@ export function initSnapMode(ctx) {
         // store.up
         /* 1. 已写入 ratio；进入“第三段”等待确认 */
         ratioAdjustStage = true;
+        store.setHint(
+          `如果需要进一步精细调整，` +
+            `请在右侧输入位置比例后点击“确认”，` +
+            `这条连接就完成啦！`
+        );
+
         pendingConnKey = pairKey(slidingConn);
         store.setPendingConnectionKey(pendingConnKey);
         store.setCurrentSlidingComp(slidingComp);
@@ -523,6 +549,7 @@ export function initSnapMode(ctx) {
     store.clearPendingConnectionKey();
     store.clearCurrentSlidingComp();
     undoBaseDepth = null; // 本条连接已确认，重置
+    store.clearHint();
   }
 
   /* ------------------------------------------------------------- *
@@ -555,6 +582,7 @@ export function initSnapMode(ctx) {
     store.clearPendingConnectionKey();
     store.clearCurrentSlidingComp?.();
     undoBaseDepth = null; // 清标志
+    store.clearHint();
   }
 
   /* === pointer 事件 ================================================= */
@@ -620,6 +648,11 @@ export function initSnapMode(ctx) {
     /* 2-b. 选中 meshA，并高亮 */
     meshA = hits[0].object;
     ctx.highlightPath(meshA.userData.pathArr);
+    store.setHint(
+      `您现在选中的是 ${meshA.name}，` +
+        `请拖拽手柄将它移动到你认为应该连接的板材附近，` +
+        `当两个板材靠得足够近、出现高亮面后松开鼠标即可。`
+    );
 
     /* 2-c. compMove = meshA 所在连通分量 */
     compMove = ctx.findComponent(meshA.userData.pathStr);

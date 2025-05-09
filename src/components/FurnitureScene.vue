@@ -9,6 +9,7 @@
 
     <!-- 文字描述浮层 -->
     <DescriptionOverlay v-if="step === 1" />
+    <HintBubble />
   </div>
 </template>
 
@@ -18,6 +19,7 @@ import { useSceneStore } from "../store";
 import { createThreeContext } from "../utils/ThreeScene";
 import DescriptionOverlay from "./DescriptionOverlay.vue";
 import StepIndicator from "./StepIndicator.vue";
+import HintBubble from "./HintBubble.vue";
 
 const store = useSceneStore();
 const canvasEl = ref(null);
