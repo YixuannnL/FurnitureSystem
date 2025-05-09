@@ -306,6 +306,8 @@ export function initControls(ctx) {
   function setMode(mode) {
     // 离开 connect / planar 时要执行各自 reset
     if (ctx.currentMode === "connect" && mode !== "connect") {
+      ctx.cancelCurrentConnection?.(); // 若有未完成连接，彻底撤销
+      ctx.finalizePendingConnection?.(); // 已确认的正常收尾
       ctx.resetConnectMode?.();
     }
     if (ctx.currentMode === "planar" && mode !== "planar") {
@@ -317,12 +319,19 @@ export function initControls(ctx) {
         tc.enabled = true;
         tc.setMode("translate");
         if (ctx.selectedMesh) tc.attach(ctx.selectedMesh);
+        // ★ 保证三轴全部可见
+        tc.showX = tc.showY = tc.showZ = true;
+        tc.showXY = tc.showYZ = tc.showXZ = false;
+        tc.showXYZ = false;
         break;
 
       case "axis":
         tc.enabled = true;
         tc.setMode("scale");
         if (ctx.selectedMesh) tc.attach(ctx.selectedMesh);
+        tc.showX = tc.showY = tc.showZ = true;
+        tc.showXY = tc.showYZ = tc.showXZ = false;
+        tc.showXYZ = false;
         break;
 
       case "connect":

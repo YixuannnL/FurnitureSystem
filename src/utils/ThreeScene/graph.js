@@ -30,10 +30,6 @@ export function initGraph(ctx) {
     // 1. 初始化：为场景现存的每个 mesh 建立空邻接表
     graph.clear();
     meshMap.forEach((_, pathStr) => graph.set(pathStr, new Set()));
-
-    // 2. 遍历连接数据
-    // conns.forEach((pair) => {
-    //     const [nameA, nameB] = Object.keys(pair);         // 连接两端短名
     /* ---------- 预处理：保留真正的 mesh 名（过滤掉新字段） ---------- */
     const RESERVED = new Set(["faceA", "faceB", "axis", "ratio"]);
 

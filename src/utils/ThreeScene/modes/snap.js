@@ -3,6 +3,23 @@ import { useSceneStore } from "../../../store";
 import { getParallelFaces, gridSnap, ratioFromOffset } from "../../faceUtils";
 import { getFaceBBox, findByPath } from "../../geometryUtils";
 
+const RESERVED = new Set([
+  "faceA",
+  "faceB",
+  "axis",
+  "ratio",
+  "axisU",
+  "axisV",
+  "ratioU",
+  "ratioV",
+]);
+function pairKey(conn) {
+  return Object.keys(conn)
+    .filter((k) => !RESERVED.has(k))
+    .sort() // A-B 与 B-A 归到同 key
+    .join("#");
+}
+
 export function initSnapMode(ctx) {
   /* ─────────────── 共享引用与配置 ─────────────── */
   const store = useSceneStore();
@@ -20,6 +37,11 @@ export function initSnapMode(ctx) {
   /** 起点世界坐标 (PointerDown 射线与 dragPlane 交点) */
   let dragStart = new THREE.Vector3();
   let dragPlane = new THREE.Plane(); // 垂直于相机视线
+
+  let ratioAdjustStage = false; // 进入第 3 段？
+  let pendingConnKey = ""; // pairKey(slidingConn)
+
+  let undoBaseDepth = null; // 撤销到的目标深度
 
   /** 高亮缓存 */
   /** @type {THREE.PlaneHelper[]} */
@@ -425,19 +447,18 @@ export function initSnapMode(ctx) {
     if (!tcDragging) {
       /* ---------- ①  二段拖拽结束  ---------- */
       if (slidingReady) {
-        store.updateConnections([...store.connections]); // ratio 已写入
-        slidingReady = false;
+        // store.up
+        /* 1. 已写入 ratio；进入“第三段”等待确认 */
+        ratioAdjustStage = true;
+        pendingConnKey = pairKey(slidingConn);
+        store.setPendingConnectionKey(pendingConnKey);
+        store.setCurrentSlidingComp(slidingComp);
 
-        /* 复位 gizmo / 选中 */
-        if (ctx.transformCtrls) {
-          const t = ctx.transformCtrls;
-          t.detach();
-          t.showX = t.showY = t.showZ = true;
-          t.showXY = t.showYZ = t.showXZ = t.showXYZ = false;
-        }
+        /* 2. 结束 gizmo 拖拽，但保持高亮 / 面框可视，让用户对照 */
+        ctx.transformCtrls.detach();
         ctx.selectedMesh = null;
-        clearHelpers();
-        ctx.highlightPath([]);
+        ctx.orbit.enabled = true;
+        // ★ 不调用 clearHelpers / highlightPath
         return; // 全部收尾 → 退出
       }
 
@@ -484,19 +505,76 @@ export function initSnapMode(ctx) {
     }
   });
 
+  function finalizePendingConnection() {
+    if (!ratioAdjustStage) return;
+
+    /* —— ① 恢复 TransformControls 三轴 —— */
+    if (ctx.transformCtrls) {
+      const t = ctx.transformCtrls;
+      t.showX = t.showY = t.showZ = true; // 主轴
+      t.showXY = t.showYZ = t.showXZ = false; // 平面
+      t.showXYZ = false; // 中心
+    }
+
+    clearHelpers();
+    ctx.highlightPath([]);
+    ratioAdjustStage = false;
+    slidingReady = false;
+    store.clearPendingConnectionKey();
+    store.clearCurrentSlidingComp();
+    undoBaseDepth = null; // 本条连接已确认，重置
+  }
+
+  /* ------------------------------------------------------------- *
+   *  取消本次连接：撤销快照、清辅线、复位 gizmo / orbit / 高亮
+   * ------------------------------------------------------------- */
+  function cancelCurrentConnection() {
+    // /* 1. 撤回到开始连接前的快照（如有） */
+    // store.undo(); // UndoManager.pop() 恢复包括 mesh 位置
+    /* 1. 一口气撤到 undoBaseDepth */
+    if (undoBaseDepth !== null) {
+      while (store.undoMgr.length > undoBaseDepth) {
+        store.undo();
+      }
+    }
+
+    /* 2. UI 清理 */
+    clearHelpers();
+    ctx.highlightPath([]);
+    ctx.transformCtrls?.detach();
+    ctx.selectedMesh = null;
+    restoreOrbit();
+
+    /* 让 FurnitureScene 的 onSelect 回调重置 currentNodePath，
+     这样右侧面板恢复到“当前子结构的全部连接”视图            */
+    ctx.onSelect?.([]); // ← 新增这一行
+
+    /* 3. 连接状态标志清零 */
+    slidingReady = false;
+    ratioAdjustStage = false;
+    store.clearPendingConnectionKey();
+    store.clearCurrentSlidingComp?.();
+    undoBaseDepth = null; // 清标志
+  }
+
   /* === pointer 事件 ================================================= */
 
-  /** ----- pointerdown : 选中组件并建立拖拽平面 ----- */
+  /* ------------------------------------------------------------- *
+   * pointerDown ⸺ 统一处理三种情况
+   *   1) 不在 connect 模式 / 非左键 / 点到 gizmo ⸺ 直接 return
+   *   2) 处于二段滑动 ready   → 单轴拖动 (第三段准备)
+   *   3) 正常第一段          → 选中 meshA、建立拖拽平面
+   * ------------------------------------------------------------- */
   function onPointerDown(ev) {
+    /* ★★ 0. 基本过滤 ★★ */
     if (ctx.currentMode !== "connect") return; // 名称沿用 "connect"
     if (ev.button !== 0) return; // 左键
-
     /* 若点中的是 gizmo 把手则完全交给 TransformControls */
     if (ctx.transformCtrls && ctx.transformCtrls.axis) return;
 
-    /* ---------- ★★ 如处于二段滑动准备态，改为启动单轴拖动 ---------- */
+    /* ★★ 1. 二段滑动 READY 状态：启动单轴拖动 ★★ */
     if (slidingReady) {
-      /* 只要点中 slidingComp 里的任何 mesh 就进入拖动 */
+      /* 1-a. 射线仅检测 slidingComp */
       toNDC(ev);
       raycaster.setFromCamera(mouseNDC, ctx.camera);
       const hits = raycaster.intersectObjects(
@@ -504,56 +582,57 @@ export function initSnapMode(ctx) {
         false
       );
 
+      /* 1-b. 命中 → 进入单轴拖动 */
       if (hits.length) {
-        // slidingDragging = true;
-
         /* 拖动平面同第一段：相机正对面 */
         dragPlane.setFromNormalAndCoplanarPoint(
           ctx.camera.getWorldDirection(new THREE.Vector3()),
           hits[0].point
         );
         dragStart.copy(hits[0].point);
-
         /* 关闭 OrbitControls */
         orbitPrevEnabled = ctx.orbit.enabled;
         ctx.orbit.enabled = false;
-
         domEl.setPointerCapture(ev.pointerId);
         return;
       }
-      /* 如果没点到组件则视为取消操作 */
-      clearHelpers();
-      ctx.highlightPath([]);
-      restoreOrbit();
+      /* 1-c. 没点到组件 → 取消二段滑动 */
+      //   clearHelpers();
+      //   ctx.highlightPath([]);
+      //   restoreOrbit();
+      cancelCurrentConnection();
       return;
     }
 
+    /* ★★ 2. 第一段：新建 compMove，准备贴面 ★★ */
+    /* 2-a. 全场可见 Mesh 做射线拾取 */
     toNDC(ev);
     raycaster.setFromCamera(mouseNDC, ctx.camera);
     const hits = raycaster.intersectObjects(
       [...ctx.meshMap.values()].filter((m) => m.visible),
       false
     );
-    if (!hits.length) return;
+    if (!hits.length) {
+      cancelCurrentConnection(); // 恢复现场
+      return;
+    }
 
+    /* 2-b. 选中 meshA，并高亮 */
     meshA = hits[0].object;
     ctx.highlightPath(meshA.userData.pathArr);
 
-    /* 连通分量作为整体移动 */
+    /* 2-c. compMove = meshA 所在连通分量 */
     compMove = ctx.findComponent(meshA.userData.pathStr);
     refreshCompFaceBBox();
 
-    /* 构建拖拽平面（摄像机前方平行面） */
+    /* 2-d. 构建拖拽平面（摄像机正对） */
     dragPlane.setFromNormalAndCoplanarPoint(
       ctx.camera.getWorldDirection(new THREE.Vector3()),
       hits[0].point
     );
     dragStart.copy(hits[0].point);
 
-    // dragging = true;
-    clearHelpers();
-
-    /* -------------- Gizmo 设置：仅三轴把手 ---------------- */
+    /* 2-e. 绑定 TransformControls（显示三轴） */
     if (ctx.transformCtrls) {
       const t = ctx.transformCtrls;
       t.attach(meshA); // 绑定 gizmo
@@ -563,10 +642,11 @@ export function initSnapMode(ctx) {
     }
     ctx.selectedMesh = meshA; // ← 让 objectChange 能正常工作
 
-    /* 不再启用旧的自由拖拽平面 —— 删除 dragging = true */
+    /* 2-f. 清除之前可能残留的辅助线 */
     clearHelpers();
 
-    /* 撤销栈：先拍快照，避免 pointermove 每帧拍 */
+    /* 2-g. 撤销栈快照（一次即可） */
+    undoBaseDepth = store.undoMgr.length; // 记录开始前的深度
     store.recordSnapshot();
   }
 
@@ -730,4 +810,9 @@ export function initSnapMode(ctx) {
 
   ctx.resetSnapMode = resetSnapMode;
   ctx.publicAPI.resetSnapMode = resetSnapMode;
+
+  ctx.finalizePendingConnection = finalizePendingConnection;
+  ctx.publicAPI.finalizePendingConnection = finalizePendingConnection;
+  ctx.cancelCurrentConnection = cancelCurrentConnection;
+  ctx.publicAPI.cancelCurrentConnection = cancelCurrentConnection;
 }

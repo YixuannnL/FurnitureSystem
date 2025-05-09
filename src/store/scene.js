@@ -56,6 +56,10 @@ export const useSceneStore = defineStore("scene", {
     showDescription: true,
     /** 已完成的子结构路径集合（路径用 "/" 拼成字符串）*/
     completedGroups: new Set(),
+    /** 当前仍在“等待确认”的连接，对应 pairKey，空串=无 */
+    pendingConnKey: "",
+    /** 第三段中需要跟随微调的 pathStr[]，空数组 = 只调 meshA */
+    currentSlidingComp: [],
   }),
 
   getters: {
@@ -172,6 +176,20 @@ export const useSceneStore = defineStore("scene", {
   },
 
   actions: {
+    setCurrentSlidingComp(list) {
+      this.currentSlidingComp = list;
+    },
+    clearCurrentSlidingComp() {
+      this.currentSlidingComp = [];
+    },
+
+    setPendingConnectionKey(key) {
+      this.pendingConnKey = key;
+    },
+    clearPendingConnectionKey() {
+      this.pendingConnKey = "";
+    },
+
     /* ---------- ratio 编辑后 → 即时移动组件 ---------- */
     /* ---------- 连接面板手动编辑后 → 立即移动 meshA ---------- */
     applyRatioChange(connObj) {
@@ -220,30 +238,24 @@ export const useSceneStore = defineStore("scene", {
         const minOff = -(halfA + halfB); // ratio = 0
         const desired = r * axisRange + minOff;
 
-        /* —— 4. 平移 meshA —— */
-        // const delta = desired - curOff;
-        // if (Math.abs(delta) < 1e-4) return;
-        // meshA.position[axis] += delta;
-        // meshA.updateMatrixWorld(true);
-        // meshA.userData.faceBBox = getFaceBBox(meshA);
         /* —— 4. 平移 **meshA 所在连通分量** —— */
         const delta = desired - curOff;
         if (Math.abs(delta) < 1e-4) return;
 
         /* 找到 meshA 所在连通分量 (pathStr[]) */
-        console.log("BEGIN!");
-        const compPaths = this.threeCtx?.findComponent(pathA) ?? [pathA];
-        console.log("compPaths, pathA:", compPaths, pathA);
+        // const compPa
+        /* ======== 只移动「第三段的 slidingComp」或仅 meshA ======== */
+        let moveList = this.currentSlidingComp?.length
+          ? this.currentSlidingComp
+          : [pathA]; // 回退只动 A
 
-        compPaths.forEach((p) => {
-          /* 若把 meshB 固定不动，可排除 pathB；此处按需求让整连通分量跟随 */
-          if (p === pathB) return; // 若希望 B 不动则保留，否则删除此行
+        moveList.forEach((p) => {
+          if (p === pathB) return; // 保证 B 不动
           const m = this.threeCtx.meshMap.get(p);
-          if (m) {
-            m.position[axis] += delta;
-            m.updateMatrixWorld(true);
-            m.userData.faceBBox = getFaceBBox(m);
-          }
+          if (!m) return;
+          m.position[axis] += delta;
+          m.updateMatrixWorld(true);
+          m.userData.faceBBox = getFaceBBox(m);
         });
       };
 

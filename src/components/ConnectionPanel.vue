@@ -11,6 +11,7 @@
             v-model="ratioStrs[i]"
             @blur="commit(i, 'ratio')"
             class="ratio-input"
+            :disabled="!isEditable(c)"
           />
         </template>
 
@@ -20,6 +21,7 @@
             v-model="ratioStrs[i].u"
             @blur="commit(i, 'ratioU')"
             class="ratio-input"
+            :disabled="!isEditable(c)"
           />
           &nbsp;
           {{ axisLabel(c.axisV) }}_
@@ -27,12 +29,21 @@
             v-model="ratioStrs[i].v"
             @blur="commit(i, 'ratioV')"
             class="ratio-input"
+            :disabled="!isEditable(c)"
           />
         </template>
 
         <span v-else class="ok"> 自动对齐 ✓</span>
       </code>
       <button @click="del(i)">删除</button>
+      <!-- 只有在连接处于“待确认”状态才出现 -->
+      <button
+        v-if="pairKey(c) === pendingKey"
+        @click="confirmConn"
+        class="confirm-btn"
+      >
+        确认
+      </button>
     </div>
   </div>
 </template>
@@ -41,6 +52,30 @@
 import { ref, computed, watch } from "vue";
 import { useSceneStore } from "../store";
 import { findByPath } from "../utils/geometryUtils";
+
+// 共用的“保留字段”集合，别到处写魔数
+const RESERVED = new Set([
+  "faceA",
+  "faceB",
+  "axis",
+  "ratio",
+  "axisU",
+  "axisV",
+  "ratioU",
+  "ratioV",
+]);
+const pairKey = (o) =>
+  Object.keys(o)
+    .filter((k) => !RESERVED.has(k))
+    .sort()
+    .join("#");
+
+const pendingKey = computed(() => store.pendingConnKey);
+
+/* —— 判定某条连接是否仍可编辑 —— */
+function isEditable(conn) {
+  return pairKey(conn) === pendingKey.value; // 仅待确认那一条
+}
 
 const curNode = computed(() =>
   findByPath(store.furnitureTree, store.currentNodePath)
@@ -67,17 +102,6 @@ const conns = computed(() => {
         nameSet.add(pathStr.split("/").at(-1));
       }
     });
-
-    const RESERVED = new Set([
-      "faceA",
-      "faceB",
-      "axis",
-      "ratio",
-      "axisU",
-      "axisV",
-      "ratioU",
-      "ratioV",
-    ]);
     return store.connections.filter((c) => {
       const ks = Object.keys(c).filter((k) => !RESERVED.has(k));
       return ks.length >= 2 && nameSet.has(ks[0]) && nameSet.has(ks[1]);
@@ -126,9 +150,24 @@ function del(i) {
   store.updateConnections(arr);
 }
 
+function confirmConn() {
+  store.threeCtx?.finalizePendingConnection?.();
+}
+
 function commit(i, which) {
-  const arr = conns.value.slice();
-  const target = { ...arr[i] }; // 拷贝避免直接改引用
+  if (!isEditable(conns.value[i])) return; // 已确认后直接无视
+  // const arr = conns.value.slice();
+  // clone 整份全局列表，保证不会漏掉其它连接
+  const arr = store.connections.slice();
+
+  /* 2. 找到同一对板件的那条连接 */
+  const key = pairKey(conns.value[i]);
+  const idx = arr.findIndex((c) => pairKey(c) === key);
+  if (idx === -1) return; // 不存在就直接返回，更安全
+  // const target = { ...arr[i] }; // 拷贝避免直接改引用
+  // // 找到真正那条要改的连接对象 —— 通过对象引用或 (objA,objB) 判断
+  // const target = arr.find((c) => c === conns.value[i]); // 或用 keys 比对
+  // if (!target) return;
 
   /* 取新字符串 */
   const newRaw =
@@ -152,12 +191,17 @@ function commit(i, which) {
   const newR = toDec(newRaw);
   if (newR === null) return; // 非数字 → 忽略
 
-  target[which] = newRaw; // 写入新的 ratio / ratioU / ratioV
-  arr[i] = target;
+  // target[which] = newRaw; // 写入新的 ratio / ratioU / ratioV
+  /* 3. 生成更新后的新对象（保持纯函数风格） */
+  const newConn = { ...arr[idx] }; // 浅拷贝
+  newConn[which] = newRaw; // ratio / ratioU / ratioV
+
+  arr[idx] = newConn;
 
   store.recordSnapshot();
   store.updateConnections(arr, true); // true=skipUndo 重用上面的快照
-  store.applyRatioChange(target); // 依据最新 ratio 立即移动
+  console.log("newConn:", newConn);
+  store.applyRatioChange(newConn); // 依据最新 ratio 立即移动
 }
 </script>
 
@@ -173,5 +217,14 @@ function commit(i, which) {
 }
 .ratio-input {
   width: 50px;
+}
+.confirm-btn {
+  background: #42b983;
+  color: #fff;
+}
+.ratio-input:disabled {
+  background: #f3f3f3;
+  color: #666;
+  cursor: not-allowed;
 }
 </style>
