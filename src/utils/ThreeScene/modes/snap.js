@@ -768,6 +768,7 @@ export function initSnapMode(ctx) {
     refreshCompFaceBBox();
 
     const best = findBestCandidate();
+    console.log("best:", best);
     if (best) {
       candidate = best;
       addRectHelper(best.faceA, 0x00ff00); // 绿 → meshA
@@ -806,6 +807,7 @@ export function initSnapMode(ctx) {
     if (!best) return;
 
     candidate = best;
+    console.log("best2:", best);
     addRectHelper(best.faceA, 0x00ff00);
     addRectHelper(best.faceB, 0xff8800);
   }

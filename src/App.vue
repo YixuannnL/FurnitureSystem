@@ -111,8 +111,8 @@ onMounted(() => {
     }
   };
   window.addEventListener("keydown", handler);
-  onUnmounted(() => window.removeEventListener("keydown", handler));
 });
+onUnmounted(() => window.removeEventListener("keydown", handler));
 </script>
 
 <style scoped>

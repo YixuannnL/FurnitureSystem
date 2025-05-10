@@ -2,7 +2,7 @@
   <div class="panel">
     <h4>连接关系 ({{ conns.length }})</h4>
     <div v-for="(c, i) in conns" :key="i" class="conn">
-      <code>
+      <code class="code">
         {{ objKeys(c)[0] }} ↔ {{ objKeys(c)[1] }}
 
         <template v-if="c.axis">
@@ -35,16 +35,20 @@
 
         <span v-else class="ok"> 自动对齐 ✓</span>
       </code>
-      <button @click="del(i)">删除</button>
-      <!-- 只有在连接处于“待确认”状态才出现 -->
-      <button
-        v-if="pairKey(c) === pendingKey"
-        @click="confirmConn"
-        class="confirm-btn"
-      >
-        确认
-      </button>
+      <div class="btn-area">
+        <button @click="del(i)">删除</button>
+        <!-- 只有在连接处于“待确认”状态才出现 -->
+        <button
+          v-if="pairKey(c) === pendingKey"
+          @click="confirmConn"
+          class="confirm-btn"
+        >
+          确认
+        </button>
+      </div>
+      <!-- {{ pairKey(c) }} -->
     </div>
+    <!-- {{ pendingKey }} -->
   </div>
 </template>
 
@@ -213,6 +217,17 @@ function commit(i, which) {
 .conn {
   display: flex;
   align-items: center;
+  gap: 6px;
+}
+.code {
+  flex-grow: 1;
+  flex-basis: 0;
+  overflow: hidden;
+}
+.btn-area {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 .ratio-input {
