@@ -481,9 +481,22 @@ export const useSceneStore = defineStore("scene", {
         this.threeCtx?.isolatePath([]);
         this.currentNodePath = [];
 
-        /* 2.收集所有 Atomic Group，并横向排布 */
-        const atomicPaths = collectAtomicGroups(this.furnitureTree);
-        this.threeCtx?.layoutPathsLine(atomicPaths);
+        // /* 2.收集所有 Atomic Group，并横向排布 */
+        // const atomicPaths = collectAtomicGroups(this.furnitureTree);
+        // this.threeCtx?.layoutPathsLine(atomicPaths);
+        /* 2. 收集所有 *非空* Atomic Group，并横向排布 */
+        const atomicPaths = collectAtomicGroups(this.furnitureTree).filter(
+          (p) => {
+            const node = findByPath(this.furnitureTree, p);
+            return node?.children?.some((c) => c.isLeaf);
+          }
+        );
+        if (atomicPaths.length) {
+          this.threeCtx?.layoutPathsLine(atomicPaths);
+        } else {
+          /* 若真的一个都没有（极端情况），直接让相机保持现状 */
+          console.warn("[Step-2] 未找到可排布的子结构，保持当前视图。");
+        }
 
         /* 3. 默认切到连接模式，方便立即操作 */
         this.setMode("connect");
