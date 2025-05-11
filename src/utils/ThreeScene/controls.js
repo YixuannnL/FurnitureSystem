@@ -381,6 +381,23 @@ export function initControls(ctx) {
   ctx.isolatePath = isolatePath;
   ctx.setMode = setMode;
 
+  /**
+   * 供 snap / 其他模块使用：把 TransformControls attach 在 mesh 上，
+   * 同时维护 selectedMesh / component / prevPosRef 三个引用。
+   */
+  ctx.attachWithComponent = function (mesh, compList) {
+    if (mesh) {
+      tc.attach(mesh);
+      ctx.selectedMesh = mesh;
+      ctx.component = compList ?? ctx.findComponent(mesh.userData.pathStr);
+      if (ctx.prevPosRef) ctx.prevPosRef.copy(mesh.position);
+    } else {
+      tc.detach();
+      ctx.selectedMesh = null;
+      ctx.component = [];
+    }
+  };
+
   /* ② 再同步到对外 publicAPI，保持旧接口不变 */
   Object.assign(ctx.publicAPI, {
     highlightPath,

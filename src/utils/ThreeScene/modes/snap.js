@@ -298,13 +298,16 @@ export function initSnapMode(ctx) {
       /* gizmo 只留这一根轴 */
       if (ctx.transformCtrls) {
         const t = ctx.transformCtrls;
-        t.attach(cand.meshA);
+        // t.attach(cand.meshA);
         t.setMode("translate");
         t.showX = axis === "x";
         t.showY = axis === "y";
         t.showZ = axis === "z";
         t.showXY = t.showYZ = t.showXZ = t.showXYZ = false;
       }
+      /* 把 gizmo 与完整 slidingComp 绑定 */
+      ctx.attachWithComponent(cand.meshA, slidingComp);
+
       restoreOrbit();
       return;
     }
@@ -364,13 +367,16 @@ export function initSnapMode(ctx) {
       /* gizmo 开启这两轴把手 */
       if (ctx.transformCtrls) {
         const t = ctx.transformCtrls;
-        t.attach(cand.meshA);
+        // t.attach(cand.meshA);
         t.setMode("translate");
         t.showX = freeAxes.includes("x");
         t.showY = freeAxes.includes("y");
         t.showZ = freeAxes.includes("z");
         t.showXY = t.showYZ = t.showXZ = t.showXYZ = false;
       }
+      /* 同步 gizmo 与 slidingComp */
+      ctx.attachWithComponent(cand.meshA, slidingComp);
+
       restoreOrbit();
       return;
     }
@@ -716,12 +722,14 @@ export function initSnapMode(ctx) {
     /* 2-e. 绑定 TransformControls（显示三轴） */
     if (ctx.transformCtrls) {
       const t = ctx.transformCtrls;
-      t.attach(meshA); // 绑定 gizmo
+      //   t.attach(meshA); // 绑定 gizmo
       t.setMode("translate");
       t.showX = t.showY = t.showZ = true;
       t.showXY = t.showYZ = t.showXZ = t.showXYZ = false; // 关闭平面/中心
     }
-    ctx.selectedMesh = meshA; // ← 让 objectChange 能正常工作
+    // ctx.selectedMesh = meshA; // ← 让 objectChange 能正常工作
+    /* 统一写入选中 & 连通分量 */
+    ctx.attachWithComponent(meshA, compMove);
 
     /* 2-f. 清除之前可能残留的辅助线 */
     clearHelpers();
