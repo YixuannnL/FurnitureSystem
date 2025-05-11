@@ -13,6 +13,8 @@
  *        ctx.publicAPI.updateConnections   (供外层调用)
  * ------------------------------------------------------------------ */
 
+import { RESERVED } from "../connectionUtils";
+
 export function initGraph(ctx) {
   /** @type {Map<string, Set<string>>} */
   const graph = new Map(); // 真正存储连通关系
@@ -31,7 +33,6 @@ export function initGraph(ctx) {
     graph.clear();
     meshMap.forEach((_, pathStr) => graph.set(pathStr, new Set()));
     /* ---------- 预处理：保留真正的 mesh 名（过滤掉新字段） ---------- */
-    const RESERVED = new Set(["faceA", "faceB", "axis", "ratio"]);
 
     function meshKeys(obj) {
       return Object.keys(obj).filter((k) => !RESERVED.has(k));

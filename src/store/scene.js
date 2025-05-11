@@ -16,6 +16,7 @@ import {
   getFaceBBox,
 } from "../utils/geometryUtils";
 import { assembleAllDrawers } from "../utils/drawerUtils";
+import { RESERVED } from "../utils/connectionUtils.js";
 
 export const useSceneStore = defineStore("scene", {
   state: () => ({
@@ -229,16 +230,6 @@ export const useSceneStore = defineStore("scene", {
         if (r === null) return;
 
         /* —— 1. 找到 meshA / meshB —— */
-        const RESERVED = new Set([
-          "faceA",
-          "faceB",
-          "axis",
-          "ratio",
-          "axisU",
-          "axisV",
-          "ratioU",
-          "ratioV",
-        ]);
         const [nameA, nameB] = Object.keys(connObj).filter(
           (k) => !RESERVED.has(k)
         );

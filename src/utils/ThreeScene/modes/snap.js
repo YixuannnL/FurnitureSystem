@@ -2,17 +2,8 @@ import * as THREE from "three";
 import { useSceneStore } from "../../../store";
 import { getParallelFaces, gridSnap, ratioFromOffset } from "../../faceUtils";
 import { getFaceBBox, findByPath } from "../../geometryUtils";
+import { RESERVED } from "../../connectionUtils";
 
-const RESERVED = new Set([
-  "faceA",
-  "faceB",
-  "axis",
-  "ratio",
-  "axisU",
-  "axisV",
-  "ratioU",
-  "ratioV",
-]);
 function pairKey(conn) {
   return Object.keys(conn)
     .filter((k) => !RESERVED.has(k))

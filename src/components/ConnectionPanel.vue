@@ -56,18 +56,8 @@
 import { ref, computed, watch } from "vue";
 import { useSceneStore } from "../store";
 import { findByPath } from "../utils/geometryUtils";
+import { RESERVED } from "../utils/connectionUtils";
 
-// 共用的“保留字段”集合，别到处写魔数
-const RESERVED = new Set([
-  "faceA",
-  "faceB",
-  "axis",
-  "ratio",
-  "axisU",
-  "axisV",
-  "ratioU",
-  "ratioV",
-]);
 const pairKey = (o) =>
   Object.keys(o)
     .filter((k) => !RESERVED.has(k))
