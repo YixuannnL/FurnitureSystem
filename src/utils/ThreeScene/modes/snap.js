@@ -823,52 +823,66 @@ export function initSnapMode(ctx) {
     const meshB = slidingMeshB;
 
     /* —— 公用工具：单轴吸附 & ratio 更新 —— */
-    const handleAxis = (axis, ratioKey) => {
+    function handleAxis(axis, ratioKey) {
+      /* ---- 世界坐标下长度 & 中心 ---- */
       const vec = new THREE.Vector3();
       const lenA = new THREE.Box3().setFromObject(meshA).getSize(vec)[axis];
       const lenB = new THREE.Box3().setFromObject(meshB).getSize(vec)[axis];
+
       const halfA = lenA * 0.5,
         halfB = lenB * 0.5;
-      const minOff = -(halfA + halfB);
-      const maxOff = halfA + halfB;
-      const axisRange = lenA + lenB;
+      const minOff = -(halfA + halfB); // ratio = 0
+      const maxOff = halfA + halfB; // ratio = 1
+      const axisRange = lenA + lenB; // 总可滑动范围
 
-      let offset = meshA.position[axis] - meshB.position[axis];
+      /** 当前 offset（世界） */
+      const ctrA = new THREE.Box3()
+        .setFromObject(meshA)
+        .getCenter(new THREE.Vector3())[axis];
+      const ctrB = new THREE.Box3()
+        .setFromObject(meshB)
+        .getCenter(new THREE.Vector3())[axis];
+      let offset = ctrA - ctrB; // A 相对 B
+
+      /* ------- 吸附目标 (端点 / 中点 / 网格) ------- */
       offset = THREE.MathUtils.clamp(offset, minOff, maxOff);
 
-      /* 端点 / 中点 / 网格吸附 */
       const snapT = SNAP_T();
       const targets = [minOff, 0, maxOff];
       let snapped = null;
-      for (const t of targets)
+      for (const t of targets) {
         if (Math.abs(offset - t) < snapT) {
           snapped = t;
           break;
         }
+      }
       if (snapped === null) {
         const g = gridSnap(offset, store.gridStep);
         if (Math.abs(offset - g) < snapT) snapped = g;
       }
       if (snapped !== null) offset = snapped;
 
-      /* 位移补偿 */
-      const need = offset - (meshA.position[axis] - meshB.position[axis]);
+      /* ---- 需要的 world 位移 ---- */
+      const desiredOffset = offset;
+      const need = desiredOffset - (ctrA - ctrB);
+
       if (Math.abs(need) > 1e-6) {
         adjusting = true;
         slidingComp.forEach((p) => {
-          const mesh = ctx.meshMap.get(p);
-          if (mesh) {
-            mesh.position[axis] += need;
+          const m = ctx.meshMap.get(p);
+          if (m) {
+            m.position[axis] += need; // 局部平移即可
+            m.updateMatrixWorld(true);
           }
         });
         adjusting = false;
         syncPrev(meshA);
       }
 
-      /* ratio 更新 */
-      const dec = (offset - minOff) / axisRange; // 0~1
+      /* ---- 更新 ratio 字符串 ---- */
+      const dec = (desiredOffset - minOff) / axisRange; // 0‥1
       slidingConn[ratioKey] = dec2frac(dec);
-    };
+    }
 
     if (slidingAxes.length === 1) {
       handleAxis(slidingAxes[0], "ratio");
