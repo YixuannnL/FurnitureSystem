@@ -543,9 +543,9 @@ export function initSnapMode(ctx) {
         );
 
         /* 2. 结束 gizmo 拖拽，但保持高亮 / 面框可视，让用户对照 */
-        ctx.transformCtrls.detach();
-        ctx.selectedMesh = null;
-        ctx.orbit.enabled = true;
+        // ctx.transformCtrls.detach();
+        // ctx.selectedMesh = null;
+        // ctx.orbit.enabled = true;
         // ★ 不调用 clearHelpers / highlightPath
         return; // 全部收尾 → 退出
       }
