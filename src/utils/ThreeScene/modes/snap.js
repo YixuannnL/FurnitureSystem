@@ -957,6 +957,8 @@ export function initSnapMode(ctx) {
       const minOff = -(halfA + halfB); // ratio = 0
       const maxOff = halfA + halfB; // ratio = 1
       const axisRange = lenA + lenB; // 总可滑动范围
+      /* ---------- 动态吸附阈值：取 25 mm 与 3 % 板宽中的较小值 ---------- */
+      const edgeSnapT = Math.min(25, (lenA + lenB) * 0.03);
 
       /** 当前 offset（世界） */
       const ctrA = new THREE.Box3()
@@ -970,15 +972,28 @@ export function initSnapMode(ctx) {
       /* ------- 吸附目标 (端点 / 中点 / 网格) ------- */
       offset = THREE.MathUtils.clamp(offset, minOff, maxOff);
 
-      const snapT = SNAP_T();
-      const targets = [minOff, 0, maxOff];
+      //   const snapT = SNAP_T();
+      //   const targets = [minOff, 0, maxOff];
+      //   let snapped = null;
+      //   for (const t of targets) {
+      //     if (Math.abs(offset - t) < snapT) {
+      //       snapped = t;
+      //       break;
+      //     }
+      //   }
+      //   if (snapped === null) {
+      //     const g = gridSnap(offset, store.gridStep);
+      //     if (Math.abs(offset - g) < snapT) snapped = g;
+      //   }
+      const snapT = SNAP_T(); // 原“面-贴-面 / 网格”阈
       let snapped = null;
-      for (const t of targets) {
-        if (Math.abs(offset - t) < snapT) {
-          snapped = t;
-          break;
-        }
-      }
+
+      /* ① 先试左右两端面吸附（阈值 edgeSnapT） */
+      if (Math.abs(offset - minOff) < edgeSnapT) snapped = minOff;
+      else if (Math.abs(offset - maxOff) < edgeSnapT) snapped = maxOff;
+
+      /* ② 再试中心对齐 & 网格吸附 */
+      if (snapped === null && Math.abs(offset) < snapT) snapped = 0;
       if (snapped === null) {
         const g = gridSnap(offset, store.gridStep);
         if (Math.abs(offset - g) < snapT) snapped = g;
