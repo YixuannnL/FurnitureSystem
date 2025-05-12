@@ -38,6 +38,10 @@ export function initSnapMode(ctx) {
   /** @type {THREE.PlaneHelper[]} */
   const helpers = [];
 
+  /* ---- 点击选面阶段状态 ---- */
+  let pickStage = 0; // 0=未选 1=已选A，待选B
+  let pickFaceA = null; // {mesh, face} 结构
+
   /** 当前检测到的候选面对 */
   let candidate = null;
   /*
@@ -72,6 +76,8 @@ export function initSnapMode(ctx) {
 
   /* ---- 单击-空白判定阈 ---- */
   const CLICK_DIST = 6; // px，与 controls.js 一致
+  let downX = 0,
+    downY = 0; // 记录 pointerDown 时的屏幕坐标
 
   /* ------------------------------------------------------------------ *
    *  若是“点一下空白” ⇒ 取消本次连接
@@ -248,6 +254,8 @@ export function initSnapMode(ctx) {
       clearHelpers();
       ctx.highlightPath([]);
       restoreOrbit();
+      store.clearConnectPick();
+
       return;
     }
 
@@ -277,15 +285,6 @@ export function initSnapMode(ctx) {
       lenAaxis = new THREE.Box3().setFromObject(cand.meshA).getSize(vec)[axis];
       lenBaxis = new THREE.Box3().setFromObject(cand.meshB).getSize(vec)[axis];
 
-      // 连接对象
-      //   slidingConn = {
-      //     [objA]: "",
-      //     [objB]: "",
-      //     faceA: cand.faceA.name,
-      //     faceB: cand.faceB.name,
-      //     axis,
-      //     ratio: dec2frac(centerRatio(cand.meshA, cand.meshB, axis)),
-      //   };
       slidingConn = {
         [objA]: "",
         [objB]: "",
@@ -324,6 +323,7 @@ export function initSnapMode(ctx) {
       }
       /* 把 gizmo 与完整 slidingComp 绑定 */
       ctx.attachWithComponent(cand.meshA, slidingComp);
+      store.clearConnectPick();
 
       restoreOrbit();
       return;
@@ -395,6 +395,7 @@ export function initSnapMode(ctx) {
       }
       /* 同步 gizmo 与 slidingComp */
       ctx.attachWithComponent(cand.meshA, slidingComp);
+      store.clearConnectPick();
 
       restoreOrbit();
       return;
@@ -436,6 +437,19 @@ export function initSnapMode(ctx) {
   }
 
   /* === 工具函数 ==================================================== */
+  function faceFromHit(mesh, hitFace) {
+    mesh.userData.faceBBox ??= getFaceBBox(mesh);
+    const n = hitFace.normal
+      .clone()
+      .transformDirection(mesh.matrixWorld)
+      .normalize();
+    // 与六面 normal 比对
+    for (const f of Object.values(mesh.userData.faceBBox)) {
+      if (f.normal.dot(n) > 0.98) return f;
+    }
+    return null;
+  }
+
   function clearHelpers() {
     helpers.forEach((h) => ctx.scene.remove(h));
     helpers.length = 0;
@@ -646,6 +660,9 @@ export function initSnapMode(ctx) {
     store.clearHint();
 
     store.endConnectSession(); // 关闭事务
+
+    pickStage = 0;
+    store.clearConnectPick();
   }
 
   /* === pointer 事件 ================================================= */
@@ -662,6 +679,9 @@ export function initSnapMode(ctx) {
     if (ev.button !== 0) return; // 左键
     /* 若点中的是 gizmo 把手则完全交给 TransformControls */
     if (ctx.transformCtrls && ctx.transformCtrls.axis) return;
+
+    downX = ev.clientX;
+    downY = ev.clientY;
 
     /* ★★ 1. 二段滑动 READY 状态：启动单轴拖动 ★★ */
     if (slidingReady) {
@@ -796,12 +816,97 @@ export function initSnapMode(ctx) {
 
   /** ----- pointerup : 若有候选则建立连接 ----- */
   function onPointerUp(ev) {
-    /* ---------- ★★ 第一段拖拽结束 ---------- */
-    if (!dragging) return;
-    dragging = false;
-    domEl.releasePointerCapture(ev.pointerId);
+    /* ---------- 判断是否为“点击” ---------- */
+    const dx = ev.clientX - downX;
+    const dy = ev.clientY - downY;
+    const isClick = dx * dx + dy * dy < CLICK_DIST * CLICK_DIST;
 
-    applyCandidate(candidate);
+    /* ---------- ① 处理拖拽流程 ---------- */
+    if (dragging) {
+      dragging = false;
+      domEl.releasePointerCapture(ev.pointerId);
+      applyCandidate(candidate); // 原有逻辑
+      return; // 结束
+    }
+    /* ---------- ② 处理点击选面贴面 ---------- */
+    if (isClick) {
+      handleClickPick(ev);
+    }
+  }
+
+  function handleClickPick(ev) {
+    /* ---------- 点击贴面：小位移 + 非拖拽 ---------- */
+    const dx = ev.clientX - downX,
+      dy = ev.clientY - downY;
+    if (dx * dx + dy * dy < CLICK_DIST * CLICK_DIST && !dragging) {
+      // 射线再次检测
+      toNDC(ev);
+      raycaster.setFromCamera(mouseNDC, ctx.camera);
+      const hits = raycaster.intersectObjects(
+        [...ctx.meshMap.values()].filter((m) => m.visible),
+        false
+      );
+      if (!hits.length) return;
+
+      let mesh = hits[0].object;
+      while (mesh && !mesh.userData?.pathArr) mesh = mesh.parent;
+      if (!mesh) return;
+
+      const face = faceFromHit(mesh, hits[0].face);
+      if (!face) return;
+
+      /* === 选 A 面 === */
+      if (pickStage === 0) {
+        pickStage = 1;
+        pickFaceA = { mesh, face };
+        store.setConnectPick({
+          meshA: mesh.name,
+          faceA: face.name,
+          meshB: "",
+          faceB: "",
+        });
+
+        ctx.highlightPath(mesh.userData.pathArr);
+        return;
+      }
+
+      /* === 选 B 面 === */
+      if (pickStage === 1) {
+        if (mesh === pickFaceA.mesh) return; // 不能同一 mesh
+        // 法向需反向平行
+        if (
+          face.axis !== pickFaceA.face.axis ||
+          face.normal.dot(pickFaceA.face.normal) > -0.95
+        )
+          return;
+
+        compMove = ctx.findComponent(pickFaceA.mesh.userData.pathStr);
+        refreshCompFaceBBox(); // 更新 faceBBox
+        ctx.attachWithComponent(pickFaceA.mesh, compMove);
+
+        pickStage = 0; // 重置
+        store.clearConnectPick();
+
+        /* 构造 candidate 并复用原 applyCandidate() 逻辑 */
+        const cand = {
+          meshA: pickFaceA.mesh,
+          meshB: mesh,
+          faceA: pickFaceA.face,
+          faceB: face,
+          delta: pickFaceA.face.normal
+            .clone()
+            .setLength(
+              face.center
+                .clone()
+                .sub(pickFaceA.face.center)
+                .dot(pickFaceA.face.normal)
+            ),
+          commonAxis: null, // 让 applyCandidate() 去判断
+        };
+        applyCandidate(cand);
+        return;
+      }
+    }
   }
 
   /* === 重置接口（切模式 / 撤销） ============================ */
@@ -812,6 +917,9 @@ export function initSnapMode(ctx) {
     clearHelpers();
     // if (ctx.orbit) ctx.orbit.enabled = orbitPrevEnabled;
     restoreOrbit(); // ★ 切模式必开启旋转
+
+    pickStage = 0;
+    store.clearConnectPick();
   }
 
   /* ------------------------------------------------------------------ *

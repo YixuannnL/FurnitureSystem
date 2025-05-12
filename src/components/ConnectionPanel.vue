@@ -1,6 +1,16 @@
 <template>
   <div class="panel">
     <h4>连接关系 ({{ conns.length }})</h4>
+    <!-- ★ 点击贴面提示区 -->
+    <div v-if="pick.meshA && !pendingKey" class="pick-info">
+      <p>
+        已选择 A 面：<strong>{{ pick.meshA }}</strong> ({{ pick.faceA }})
+      </p>
+      <p v-if="pick.meshB">
+        已选择 B 面：<strong>{{ pick.meshB }}</strong> ({{ pick.faceB }})
+      </p>
+      <p v-else style="color: #888">请再点选另一个板件的对应面…</p>
+    </div>
     <div v-for="(c, i) in conns" :key="i" class="conn">
       <code class="code">
         {{ objKeys(c)[0] }} ↔ {{ objKeys(c)[1] }}
@@ -57,6 +67,8 @@ import { ref, computed, watch } from "vue";
 import { useSceneStore } from "../store";
 import { findByPath } from "../utils/geometryUtils";
 import { RESERVED } from "../utils/connectionUtils";
+
+const pick = computed(() => store.connectPick);
 
 const pairKey = (o) =>
   Object.keys(o)
@@ -231,5 +243,10 @@ function commit(i, which) {
   background: #f3f3f3;
   color: #666;
   cursor: not-allowed;
+}
+.pick-info {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

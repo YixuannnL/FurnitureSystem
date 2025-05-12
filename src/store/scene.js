@@ -67,6 +67,9 @@ export const useSceneStore = defineStore("scene", {
     showHint: true, // 用户可以隐藏
     connectSessionActive: false, // 是否处于连接事务
     _connectSnapshotTaken: false, // 该事务是否已拍首帧
+
+    /* ★ 新增：连接模式点击选面临时信息 ★ */
+    connectPick: { meshA: "", faceA: "", meshB: "", faceB: "" },
   }),
 
   getters: {
@@ -183,6 +186,13 @@ export const useSceneStore = defineStore("scene", {
   },
 
   actions: {
+    setConnectPick(info) {
+      this.connectPick = info;
+    },
+    clearConnectPick() {
+      this.connectPick = { meshA: "", faceA: "", meshB: "", faceB: "" };
+    },
+
     startConnectSession() {
       this.connectSessionActive = true;
       this._connectSnapshotTaken = false;
