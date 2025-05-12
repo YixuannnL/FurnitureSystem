@@ -128,29 +128,35 @@ export function initSnapMode(ctx) {
    * 且满足平行&重叠条件的面对 pair。
    * @returns {null|{ meshA, meshB, faceA, faceB, delta, commonAxis }}
    */
+  //   function findBestCandidate() {
+  //     const snapT = store.snapThreshold;
+  //     let best = null;
+  //     let bestDist = snapT;
+
+  //     compMove.forEach((pathStr) => {
+  //       const mA = ctx.meshMap.get(pathStr);
+  //       if (!mA) return;
+  //       const facesA = mA.userData.faceBBox;
   function findBestCandidate() {
+    if (!meshA) return null; // ① 必须已有首选 A
+    const facesA = meshA.userData.faceBBox; // ② 只看这 6 个面
+
     const snapT = store.snapThreshold;
     let best = null;
     let bestDist = snapT;
 
-    compMove.forEach((pathStr) => {
-      const mA = ctx.meshMap.get(pathStr);
-      if (!mA) return;
-      const facesA = mA.userData.faceBBox;
+    ctx.meshMap.forEach((mB, pB) => {
+      // ③ 任意可见 B
+      if (compMove.includes(pB) || !mB.visible) return;
+      mB.updateMatrixWorld(true);
+      mB.userData.faceBBox = getFaceBBox(mB);
 
-      ctx.meshMap.forEach((mB, pB) => {
-        if (compMove.includes(pB) || !mB.visible) return;
-        mB.updateMatrixWorld(true);
-        mB.userData.faceBBox = getFaceBBox(mB);
-
-        getParallelFaces(facesA, mB.userData.faceBBox, snapT).forEach(
-          (pair) => {
-            if (pair.dist < bestDist) {
-              best = { ...pair, meshA: mA, meshB: mB };
-              bestDist = pair.dist;
-            }
-          }
-        );
+      getParallelFaces(facesA, mB.userData.faceBBox, snapT).forEach((pair) => {
+        if (pair.dist < bestDist) {
+          // ④ 记录最短距离
+          best = { ...pair, meshA, meshB: mB };
+          bestDist = pair.dist;
+        }
       });
     });
     return best;
