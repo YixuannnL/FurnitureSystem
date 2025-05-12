@@ -251,8 +251,14 @@ export function initSnapMode(ctx) {
       store.updateConnections(
         withUniqueConn(store.connections, objA, objB, connObj)
       );
+      /* —— 立即高亮 A、B 两端完整连通分量 —— */
+      const compA = ctx.findComponent(pathA); // ["…/drawer_left_side", …]
+      const compB = ctx.findComponent(pathB);
+      const toHL = [...new Set([...compA, ...compB])].map((p) => p.split("/"));
+      ctx.highlightPath(toHL);
+
+      /* 仍然清辅助线与 Orbit，但保持双高亮直到用户开始下一次操作 */
       clearHelpers();
-      ctx.highlightPath([]);
       restoreOrbit();
       store.clearConnectPick();
 
@@ -325,6 +331,12 @@ export function initSnapMode(ctx) {
       ctx.attachWithComponent(cand.meshA, slidingComp);
       store.clearConnectPick();
 
+      /* 取 A、B 各自的连通分量（整子结构 / 多板组合） */
+      const compA = ctx.findComponent(pathA); // 再取一次最保险
+      const compB = ctx.findComponent(pathB);
+      const toHL = [...new Set([...compA, ...compB])].map((p) => p.split("/"));
+      ctx.highlightPath(toHL);
+
       restoreOrbit();
       return;
     }
@@ -396,6 +408,12 @@ export function initSnapMode(ctx) {
       /* 同步 gizmo 与 slidingComp */
       ctx.attachWithComponent(cand.meshA, slidingComp);
       store.clearConnectPick();
+
+      /* 取 A、B 各自的连通分量（整子结构 / 多板组合） */
+      const compA = ctx.findComponent(pathA); // 再取一次最保险
+      const compB = ctx.findComponent(pathB);
+      const toHL = [...new Set([...compA, ...compB])].map((p) => p.split("/"));
+      ctx.highlightPath(toHL);
 
       restoreOrbit();
       return;
@@ -737,7 +755,11 @@ export function initSnapMode(ctx) {
 
     /* 2-b. 选中 meshA，并高亮 */
     meshA = hits[0].object;
-    ctx.highlightPath(meshA.userData.pathArr);
+    // ⬇ 高亮 meshA 所在连通分量（抽屉 5 块板一次全亮）
+    const compA = ctx
+      .findComponent(meshA.userData.pathStr)
+      .map((p) => p.split("/")); // 转成 path 数组
+    ctx.highlightPath(compA);
     store.setHint(
       `您现在选中的是 ${meshA.name}，` +
         `请拖拽手柄将它移动到你认为应该连接的板材附近，` +
@@ -883,6 +905,14 @@ export function initSnapMode(ctx) {
 
         pickStage = 0; // 重置
         store.clearConnectPick();
+
+        /* —— 高亮 A、B 各自的连通分量 —— */
+        const compA = ctx.findComponent(pickFaceA.mesh.userData.pathStr);
+        const compB = ctx.findComponent(mesh.userData.pathStr);
+        const toHL = [...new Set([...compA, ...compB])].map((p) =>
+          p.split("/")
+        );
+        ctx.highlightPath(toHL);
 
         /* 构造 candidate 并复用原 applyCandidate() 逻辑 */
         const cand = {

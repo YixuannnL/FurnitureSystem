@@ -22,15 +22,6 @@ import {
 
 import { useSceneStore } from "../../store";
 
-/**
- * 在 createThreeContext 的早期被调用，向 ctx 注入：
- *   ctx.orbit
- *   ctx.transformCtrls
- *   ctx.selectedMesh
- *   ctx.component
- *   ctx.setMode / highlightPath / isolatePath
- * 同时把这些放到 ctx.publicAPI 中，保持与旧版一致
- */
 export function initControls(ctx) {
   /* ——— 本文件内部频繁使用的引用 ——— */
   const { scene, camera, renderer, meshMap, graph, onSelect, publicAPI } = ctx;
@@ -146,8 +137,6 @@ export function initControls(ctx) {
       }
     });
 
-    // 锚点
-    // ctx.selectedMesh.userData.anchors = generateAnchorPoints(newDims, 50);
     // 六面数据刷新，保障后续连接检测
     ctx.selectedMesh.userData.faceBBox = getFaceBBox(ctx.selectedMesh);
 
@@ -171,11 +160,21 @@ export function initControls(ctx) {
    * 4. 高亮 / 隔离 / 选中
    * ========================================================= */
 
-  /** 高亮一段路径（空数组 = 取消高亮） */
   function highlightPath(selectedPath = []) {
-    const targetStr = selectedPath.join("/");
+    /* ---------- 解析传参 ---------- */
+    let prefixes = [];
+    if (selectedPath.length === 0) {
+      prefixes = [""]; // 空 ⇒ 全亮
+    } else if (Array.isArray(selectedPath[0])) {
+      // 数组套数组
+      prefixes = selectedPath.map((p) => p.join("/"));
+    } else {
+      // 单一路径
+      prefixes = [selectedPath.join("/")];
+    }
+
     meshMap.forEach((mesh, pathStr) => {
-      const isTarget = !targetStr || pathStr.startsWith(targetStr);
+      const isTarget = prefixes.some((pre) => pathStr.startsWith(pre));
 
       mesh.material.transparent = !isTarget;
       mesh.material.opacity = isTarget ? 1 : 0.15;
@@ -371,12 +370,6 @@ export function initControls(ctx) {
   /* ===========================================================
    * 7. 把公开接口挂到 ctx.publicAPI
    * ========================================================= */
-  // Object.assign(publicAPI, {
-  //     highlightPath,
-  //     isolatePath,
-  //     setMode,
-  //     resetConnectMode: () => ctx.resetConnectMode?.() // 占位，真正实现由 connect.js 覆盖
-  // });+  /* ① 先把方法挂到 ctx 本身，供其他内部模块直接访问 */
   ctx.highlightPath = highlightPath;
   ctx.isolatePath = isolatePath;
   ctx.setMode = setMode;
