@@ -33,6 +33,8 @@ export const useSceneStore = defineStore("scene", {
     connections: connRaw.data,
     /** 操作模式："connect"|"planar"|"axis"|"drag" */
     mode: "drag",
+    /** Step-2 右侧面板显示模式：inter | internal | tree */
+    step2View: "inter",
     /** 第 1 步用到的遍历队列 */
     groupPaths: [],
     groupIdx: -1,
@@ -703,6 +705,39 @@ export const useSceneStore = defineStore("scene", {
         depth: base.depth / 3,
       };
       this.addMesh(parentPath, newName, dims);
+    },
+
+    /* ---------- Step-2 面板三视图切换 ---------- */
+    setStep2View(view) {
+      if (["inter", "internal", "tree"].includes(view)) {
+        this.step2View = view;
+      }
+    },
+
+    /** 删除整个子结构（非 leaf 节点） */
+    deleteGroup(pathArr) {
+      this.recordSnapshot(); // 撤销快照
+
+      // 1) 收集其所有 leaf-pathStr
+      const prefix = pathArr.join("/");
+      const toRemove = [];
+      this.threeCtx?.meshMap?.forEach((_, p) => {
+        if (p.startsWith(prefix + "/")) toRemove.push(p);
+      });
+
+      // 2) 删除 mesh
+      toRemove.forEach((p) => this.threeCtx?.removeMesh(p));
+
+      // 3) 从 meta 树移除节点
+      removeNodeByPath(this.furnitureTree, pathArr);
+
+      // 4) 清理所有相关连接
+      this.connections = this.connections.filter((c) => {
+        const ks = Object.keys(c).filter((k) => !RESERVED.has(k));
+        return !ks.some((name) => toRemove.some((p) => p.endsWith("/" + name)));
+      });
+      this.threeCtx?.updateConnections(this.connections);
+      this.meshRevision++;
     },
   },
 });

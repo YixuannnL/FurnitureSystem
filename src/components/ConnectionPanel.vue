@@ -83,6 +83,17 @@ function isEditable(conn) {
   return pairKey(conn) === pendingKey.value; // 仅待确认那一条
 }
 
+/* ---------- 新增工具：判定连接是否完全落在某一 group 前缀 ---------- */
+function connInGroup(conn, prefix, nameSet) {
+  /* 新格式：直接看 path 前缀 */
+  if (conn.pathA && conn.pathB) {
+    return conn.pathA.startsWith(prefix) && conn.pathB.startsWith(prefix);
+  }
+  /* 旧格式：退回名字集合 */
+  const ks = Object.keys(conn).filter((k) => !RESERVED.has(k));
+  return ks.length >= 2 && nameSet.has(ks[0]) && nameSet.has(ks[1]);
+}
+
 const curNode = computed(() =>
   findByPath(store.furnitureTree, store.currentNodePath)
 );
@@ -93,25 +104,39 @@ const conns = computed(() => {
   if (store.step === 1 && store.currentNodePath.length) {
     /* ------------ A. 当前节点是 Leaf ------------ */
     if (isLeafNode.value) {
+      // const leafName = store.currentNodePath.at(-1);
+      // return store.connections.filter((c) => {
+      //   const ks = Object.keys(c);
+      //   return ks.includes(leafName);
+      // });
       const leafName = store.currentNodePath.at(-1);
+      const pathStr = store.currentNodePath.join("/");
       return store.connections.filter((c) => {
-        const ks = Object.keys(c);
-        return ks.includes(leafName);
+        if (c.pathA && c.pathB) {
+          return c.pathA === pathStr || c.pathB === pathStr;
+        }
+        return Object.keys(c).includes(leafName);
       });
     }
 
     /* ------------ B. 当前节点是 Group ------------ */
     const prefix = store.currentNodePath.join("/");
+    // const nameSet = new Set();
+    // store.threeCtx?.meshMap?.forEach((_, pathStr) => {
+    //   if (pathStr.startsWith(prefix)) {
+    //     nameSet.add(pathStr.split("/").at(-1));
+    //   }
+    // });
+    // return store.connections.filter((c) => {
+    //   const ks = Object.keys(c).filter((k) => !RESERVED.has(k));
+    //   return ks.length >= 2 && nameSet.has(ks[0]) && nameSet.has(ks[1]);
+    // });
+    /* 组内 leaf-name 集合（旧格式备用） */
     const nameSet = new Set();
-    store.threeCtx?.meshMap?.forEach((_, pathStr) => {
-      if (pathStr.startsWith(prefix)) {
-        nameSet.add(pathStr.split("/").at(-1));
-      }
+    store.threeCtx?.meshMap?.forEach((_, p) => {
+      if (p.startsWith(prefix)) nameSet.add(p.split("/").at(-1));
     });
-    return store.connections.filter((c) => {
-      const ks = Object.keys(c).filter((k) => !RESERVED.has(k));
-      return ks.length >= 2 && nameSet.has(ks[0]) && nameSet.has(ks[1]);
-    });
+    return store.connections.filter((c) => connInGroup(c, prefix, nameSet));
   }
 
   /* ---------- Step-2 : 若选中了某个 leaf Mesh，仅显示它的连接 ---------- */
@@ -120,11 +145,43 @@ const conns = computed(() => {
     store.currentNodePath.length && // 选中了东西
     isLeafNode.value // 且确实是 leaf
   ) {
+    // const leafName = store.currentNodePath.at(-1);
+    // return store.connections.filter((c) => Object.keys(c).includes(leafName));
     const leafName = store.currentNodePath.at(-1);
-    return store.connections.filter((c) => Object.keys(c).includes(leafName));
+    const pathStr = store.currentNodePath.join("/");
+    return store.connections.filter((c) => {
+      if (c.pathA && c.pathB) {
+        return c.pathA === pathStr || c.pathB === pathStr;
+      }
+      return Object.keys(c).includes(leafName);
+    });
   }
 
-  /* 其它步骤：不做过滤 */
+  /* ---------- Step-2：未选节点 ⇒ 只保留“子结构间”连接 ---------- */
+  if (store.step === 2 && store.currentNodePath.length === 0) {
+    return store.connections.filter((c) => {
+      /* 新格式：优先用 pathA / pathB */
+      if (c.pathA && c.pathB) {
+        const parentA = c.pathA.substring(0, c.pathA.lastIndexOf("/"));
+        const parentB = c.pathB.substring(0, c.pathB.lastIndexOf("/"));
+        return parentA !== parentB; // 不属于同一子结构
+      }
+
+      /* 旧格式：退回名字→路径映射的第一条 */
+      const ks = Object.keys(c).filter((k) => !RESERVED.has(k));
+      if (ks.length < 2) return false;
+
+      const pathsA = store.threeCtx?.nameIndex[ks[0]] ?? [];
+      const pathsB = store.threeCtx?.nameIndex[ks[1]] ?? [];
+      if (!pathsA.length || !pathsB.length) return true; // 无法判断 ⇒ 保留
+
+      const parentA = pathsA[0].substring(0, pathsA[0].lastIndexOf("/"));
+      const parentB = pathsB[0].substring(0, pathsB[0].lastIndexOf("/"));
+      return parentA !== parentB;
+    });
+  }
+
+  /* 其它情况：原样返回 */
   return store.connections;
 });
 

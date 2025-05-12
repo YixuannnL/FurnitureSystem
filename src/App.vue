@@ -23,18 +23,22 @@
       <aside class="right" :style="{ width: rightWidth + 'px' }">
         <!-- 共面伸缩模式 -->
         <PlanarPanel v-if="mode === 'planar'" />
-        <!-- 连接模式：仅 Step‑1 / Step‑2 显示连接面板 -->
-        <ConnectionPanel
-          v-else-if="mode === 'connect' && (step === 1 || step === 2)"
-        />
 
-        <!-- Step‑1（非 connect）：按叶/组面板 -->
-        <template v-else-if="step === 1">
-          <MeshPanel v-if="isLeaf" />
-          <GroupPanel v-else />
+        <!-- ========== Step-2 特殊逻辑 ========== -->
+        <template v-else-if="step === 2">
+          <!-- 1) 选中了板件 → 仍显示 ConnectionPanel (按 leaf 过滤) -->
+          <ConnectionPanel v-if="isLeaf && mode === 'connect'" />
+
+          <!-- 2) 空白状态 → 三视图切换 -->
+          <Step2SwitchPanel v-else />
         </template>
 
-        <!-- 其它情况（Step‑0 / Step‑3）保持空或自定义面板 -->
+        <!-- Step-1：沿旧逻辑 -->
+        <template v-else-if="step === 1">
+          <ConnectionPanel v-if="mode === 'connect'" />
+          <MeshPanel v-else-if="isLeaf" />
+          <GroupPanel v-else />
+        </template>
       </aside>
     </main>
 
@@ -53,6 +57,7 @@ import Toolbar from "./components/Toolbar.vue";
 import GroupPanel from "./components/GroupPanel.vue";
 import MeshPanel from "./components/MeshPanel.vue";
 import PlanarPanel from "./components/PlanarPanel.vue";
+import Step2SwitchPanel from "./components/Step2SwitchPanel.vue";
 import { findByPath } from "./utils/geometryUtils";
 import { useSceneStore } from "./store";
 
@@ -168,5 +173,9 @@ footer {
 }
 .resizer:active {
   background: rgba(0, 0, 0, 0.15);
+}
+.mesh-label {
+  pointer-events: none;
+  white-space: nowrap;
 }
 </style>

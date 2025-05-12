@@ -68,6 +68,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { useSceneStore } from "../store";
+import { RESERVED } from "../utils/connectionUtils";
 const store = useSceneStore();
 
 function delMesh(p) {
@@ -94,11 +95,22 @@ const meshes = computed(() => {
 const meshNames = computed(() => meshes.value.map((m) => m.name));
 
 const keys = (o) => Object.keys(o);
+// const localConns = computed(() => {
+//   const set = new Set(meshNames.value);
+//   return store.connections.filter((c) => {
+//     const [a, b] = keys(c);
+//     return set.has(a) && set.has(b);
+//   });
+// });
 const localConns = computed(() => {
-  const set = new Set(meshNames.value);
+  const prefix = store.currentNodePath.join("/");
+  const nameSet = new Set(meshNames.value); // 旧格式备用
   return store.connections.filter((c) => {
-    const [a, b] = keys(c);
-    return set.has(a) && set.has(b);
+    if (c.pathA && c.pathB) {
+      return c.pathA.startsWith(prefix) && c.pathB.startsWith(prefix);
+    }
+    const ks = keys(c).filter((k) => !RESERVED.has(k));
+    return ks.length >= 2 && nameSet.has(ks[0]) && nameSet.has(ks[1]);
   });
 });
 

@@ -610,6 +610,8 @@ export function initSnapMode(ctx) {
     ctx.highlightPath([]);
     restoreOrbit();
     store.clearHint();
+    /* —— 关键：清除 A/B 面临时记录，防止提示条残留 —— */
+    store.clearConnectPick();
 
     /* ④ 清状态标志 */
     ratioAdjustStage = false;
@@ -928,7 +930,7 @@ export function initSnapMode(ctx) {
     if (!best) return;
 
     candidate = best;
-    console.log("best2:", best);
+    // console.log("best2:", best);
     addRectHelper(best.faceA, 0x00ff00);
     addRectHelper(best.faceB, 0xff8800);
   }
