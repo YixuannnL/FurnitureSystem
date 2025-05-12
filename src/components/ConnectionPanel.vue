@@ -114,6 +114,16 @@ const conns = computed(() => {
     });
   }
 
+  /* ---------- Step-2 : 若选中了某个 leaf Mesh，仅显示它的连接 ---------- */
+  if (
+    store.step === 2 &&
+    store.currentNodePath.length && // 选中了东西
+    isLeafNode.value // 且确实是 leaf
+  ) {
+    const leafName = store.currentNodePath.at(-1);
+    return store.connections.filter((c) => Object.keys(c).includes(leafName));
+  }
+
   /* 其它步骤：不做过滤 */
   return store.connections;
 });
@@ -162,18 +172,12 @@ function confirmConn() {
 
 function commit(i, which) {
   if (!isEditable(conns.value[i])) return; // 已确认后直接无视
-  // const arr = conns.value.slice();
-  // clone 整份全局列表，保证不会漏掉其它连接
   const arr = store.connections.slice();
 
   /* 2. 找到同一对板件的那条连接 */
   const key = pairKey(conns.value[i]);
   const idx = arr.findIndex((c) => pairKey(c) === key);
   if (idx === -1) return; // 不存在就直接返回，更安全
-  // const target = { ...arr[i] }; // 拷贝避免直接改引用
-  // // 找到真正那条要改的连接对象 —— 通过对象引用或 (objA,objB) 判断
-  // const target = arr.find((c) => c === conns.value[i]); // 或用 keys 比对
-  // if (!target) return;
 
   /* 取新字符串 */
   const newRaw =
