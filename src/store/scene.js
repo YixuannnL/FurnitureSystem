@@ -72,6 +72,14 @@ export const useSceneStore = defineStore("scene", {
 
     /* ★ 新增：连接模式点击选面临时信息 ★ */
     connectPick: { meshA: "", faceA: "", meshB: "", faceB: "" },
+
+    /* ========== Constraint-Resize (Step-2 专用) ========== */
+    constraintMode: false, // 是否处于该模式
+    constraintTargets: [], // 选中的子结构 path[][]    (≤30 存数组)
+    constraintRefPath: [], // 参考板件 path[]
+    constraintAxis: "x", // "x"|"y"|"z"
+    constraintRatios: [], // e.g.  [1,1,1]  与 targets 对齐
+    constraintHistory: [], // 每次执行后 push 记录
   }),
 
   getters: {
@@ -188,6 +196,213 @@ export const useSceneStore = defineStore("scene", {
   },
 
   actions: {
+    /* —— 切换模式 —— */
+    enterConstraintMode() {
+      if (this.step !== 2) return;
+      this.constraintMode = true;
+      this.constraintTargets = [];
+      this.constraintRefPath = [];
+      this.constraintRatios = [];
+      this.constraintAxis = "x";
+      this.mode = "constraint"; // 让 controls 等知道
+      this.threeCtx?.setMode("constraint");
+    },
+    exitConstraintMode() {
+      this.constraintMode = false;
+      this.constraintTargets = [];
+      this.constraintRefPath = [];
+      this.constraintRatios = [];
+      if (this.mode === "constraint") {
+        this.mode = "drag";
+        this.threeCtx?.setMode("drag");
+      }
+      this.threeCtx?.highlightPath([]);
+    },
+
+    /* —— 选目标子结构（toggle） —— */
+    toggleConstraintTarget(pathArr) {
+      if (!this.constraintMode) return;
+      const key = pathArr.join("/");
+      const idx = this.constraintTargets.findIndex((p) => p.join("/") === key);
+      if (idx === -1) {
+        this.constraintTargets.push(pathArr);
+        this.constraintRatios.push(1);
+      } else {
+        this.constraintTargets.splice(idx, 1);
+        this.constraintRatios.splice(idx, 1);
+      }
+      /* 高亮所有已选 targets & ref 板 */
+      const hl = [
+        ...this.constraintTargets,
+        this.constraintRefPath.length ? this.constraintRefPath : [],
+      ];
+      this.threeCtx?.highlightPath(hl);
+    },
+
+    /* —— 设参考板 —— */
+    setConstraintRef(pathArr) {
+      if (!this.constraintMode) return;
+      this.constraintRefPath = pathArr;
+      const hl = [
+        ...this.constraintTargets,
+        this.constraintRefPath.length ? pathArr : [],
+      ];
+      this.threeCtx?.highlightPath(hl);
+    },
+
+    /* —— 改轴 / 比例 —— */
+    setConstraintAxis(axis) {
+      if (["x", "y", "z"].includes(axis)) this.constraintAxis = axis;
+    },
+    setConstraintRatio(idx, val) {
+      const n = parseFloat(val);
+      if (isFinite(n) && n > 0) this.constraintRatios[idx] = n;
+    },
+
+    /* ======== 核心执行：applyConstraintResize() ======== */
+    applyConstraintResize() {
+      if (
+        !this.constraintMode ||
+        this.constraintTargets.length < 1 ||
+        !this.constraintRefPath.length
+      )
+        return;
+
+      /* 0. 基本量准备 */
+      const axis = this.constraintAxis;
+      const refMesh = this.threeCtx?.meshMap.get(
+        this.constraintRefPath.join("/")
+      );
+      if (!refMesh) return;
+      const refSize = new THREE.Box3()
+        .setFromObject(refMesh)
+        .getSize(new THREE.Vector3())[axis];
+
+      /* 比例归一化 → 每组目标长度 */
+      const sumR = this.constraintRatios.reduce((s, v) => s + v, 0);
+      const targetLens = this.constraintRatios.map((r) => (r / sumR) * refSize);
+
+      /* 1. 拍快照 (整动作一次) */
+      this.recordSnapshot();
+
+      /* 2. 对每个子结构做缩放 ======================================= */
+      this.constraintTargets.forEach((grpPath, idx) => {
+        const gObj = this.threeCtx?.scene.getObjectByName(grpPath.join("/"));
+        if (!gObj) return;
+
+        /* A. 计算当前总长（包围盒） */
+        const box = new THREE.Box3().setFromObject(gObj);
+        const curLen = box.max[axis] - box.min[axis];
+        if (curLen < 1e-3) return;
+        const goalLen = targetLens[idx];
+        const scale = goalLen / curLen;
+        if (Math.abs(scale - 1) < 1e-4) return;
+
+        /* B. 遍历该组所有叶子 - mesh，按“厚度判断”决定缩放/平移 */
+        /*   – 判断板材在该轴的尺寸 ≤ 5 mm → 认为是厚度，不缩放
+         *   – 其它板材：在该轴缩放；并整体对称向 center 平移 Δ/2   */
+
+        /* box center 用来保持对称缩放 */
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+
+        gObj.traverse((obj) => {
+          if (!obj.isMesh) return;
+          const dims = (() => {
+            const gp = obj.geometry?.parameters;
+            if (gp && obj.geometry.type === "BoxGeometry") {
+              return gp;
+            }
+            const b = new THREE.Box3().setFromObject(obj);
+            return {
+              width: b.max.x - b.min.x,
+              height: b.max.y - b.min.y,
+              depth: b.max.z - b.min.z,
+            };
+          })();
+          const dimKey =
+            axis === "x" ? "width" : axis === "y" ? "height" : "depth";
+          const isThickness = dims[dimKey] <= 5.01; // ≤5 mm 视为厚度
+
+          /* ---- 位置微调以保持两端固定 ---- */
+          const delta = (scale - 1) * (obj.position[axis] - center[axis]);
+          obj.position[axis] += delta;
+
+          /* ---- 几何缩放（非厚度板才缩） ---- */
+          if (!isThickness) {
+            dims[dimKey] *= scale;
+            /* 更新 meta - dims */
+            const node = findByPath(this.furnitureTree, obj.userData.pathArr);
+            if (node?.dims) node.dims[dimKey] = dims[dimKey];
+
+            /* 替换几何 / 边线 */
+            obj.geometry.dispose();
+            obj.geometry = new THREE.BoxGeometry(
+              dims.width,
+              dims.height,
+              dims.depth
+            );
+            obj.children.forEach((c) => {
+              if (c.isLineSegments) {
+                c.geometry.dispose();
+                c.geometry = new THREE.EdgesGeometry(obj.geometry, 20);
+              }
+            });
+          }
+
+          /* ---- 六面信息 & label 高度 ---- */
+          obj.userData.faceBBox = getFaceBBox(obj);
+          if (obj.userData.label) {
+            obj.userData.label.position.set(0, dims.height * 0.55 + 10, 0);
+          }
+        });
+      });
+
+      /* 3. 刷新连接比例（仅同轴 ratio） */
+      this.connections.forEach((c) => {
+        if (c.axis && c.axis === axis && c.pathA && c.pathB) {
+          const mA = this.threeCtx?.meshMap.get(c.pathA);
+          const mB = this.threeCtx?.meshMap.get(c.pathB);
+          if (mA && mB) {
+            const vec = new THREE.Vector3();
+            const ctrA = new THREE.Box3()
+              .setFromObject(mA)
+              .getCenter(new THREE.Vector3())[axis];
+            const ctrB = new THREE.Box3()
+              .setFromObject(mB)
+              .getCenter(new THREE.Vector3())[axis];
+            const lenA = new THREE.Box3().setFromObject(mA).getSize(vec)[axis];
+            const lenB = new THREE.Box3().setFromObject(mB).getSize(vec)[axis];
+            const minOff = -(lenA * 0.5 + lenB * 0.5);
+            const axisRange = lenA + lenB;
+            const dec = (ctrA - ctrB - minOff) / axisRange;
+            c.ratio = +dec.toFixed(3);
+          }
+        }
+      });
+
+      /* 4. 重建无向图 & 通知 UI 刷新 */
+      this.threeCtx?.updateConnections(this.connections);
+
+      /* ========= 5. 写入历史 & 清空状态 ========= */
+      this.constraintHistory.unshift({
+        time: Date.now(),
+        axis,
+        targets: JSON.parse(JSON.stringify(this.constraintTargets)),
+        ref: [...this.constraintRefPath],
+        ratios: [...this.constraintRatios],
+      });
+      /* 仅保留最近 20 条 */
+      if (this.constraintHistory.length > 20)
+        this.constraintHistory.length = 20;
+
+      /* 清空当前 selection，准备下一次操作 */
+      this.constraintTargets = [];
+      this.constraintRatios = [];
+      this.constraintRefPath = [];
+      this.threeCtx?.highlightPath([]);
+    },
+
     setConnectPick(info) {
       this.connectPick = info;
     },

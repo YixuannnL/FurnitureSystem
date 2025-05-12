@@ -44,13 +44,27 @@ const allBtns = [
   { mode: "drag", label: "拖动" },
 ];
 
+/* Step-2 专用：约束缩放 */
+const constraintBtn = { mode: "constraint", label: "约束缩放" };
+
 /* ★ Step 0 只显示 drag */
 const visibleBtns = computed(() =>
-  step.value === 0 ? allBtns.filter((b) => b.mode === "drag") : allBtns
+  // step.value === 0 ? allBtns.filter((b) => b.mode === "drag") : allBtns
+  step.value === 0
+    ? allBtns.filter((b) => b.mode === "drag")
+    : step.value === 2
+    ? [...allBtns, constraintBtn]
+    : allBtns
 );
 
 function set(m) {
-  store.setMode(m);
+  // store.setMode(m);
+  if (m === "constraint") {
+    if (!store.constraintMode) store.enterConstraintMode();
+  } else {
+    store.exitConstraintMode();
+    store.setMode(m);
+  }
 }
 function next() {
   store.nextStep();

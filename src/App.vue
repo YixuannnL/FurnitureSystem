@@ -21,8 +21,11 @@
 
       <!-- —— 右侧面板 —— -->
       <aside class="right" :style="{ width: rightWidth + 'px' }">
+        <!-- 约束缩放模式：只显示 ConstraintPanel -->
+        <ConstraintPanel v-if="mode === 'constraint'" />
+
         <!-- 共面伸缩模式 -->
-        <PlanarPanel v-if="mode === 'planar'" />
+        <PlanarPanel v-else-if="mode === 'planar'" />
 
         <!-- ========== Step-2 特殊逻辑 ========== -->
         <template v-else-if="step === 2">
@@ -58,6 +61,7 @@ import GroupPanel from "./components/GroupPanel.vue";
 import MeshPanel from "./components/MeshPanel.vue";
 import PlanarPanel from "./components/PlanarPanel.vue";
 import Step2SwitchPanel from "./components/Step2SwitchPanel.vue";
+import ConstraintPanel from "./components/ConstraintPanel.vue";
 import { findByPath } from "./utils/geometryUtils";
 import { useSceneStore } from "./store";
 

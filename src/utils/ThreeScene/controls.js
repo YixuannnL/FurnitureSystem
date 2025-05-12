@@ -12,13 +12,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
-
-import {
-  dimsToBoxGeom,
-  generateAnchorPoints,
-  findByPath,
-  getFaceBBox,
-} from "../geometryUtils";
+import { dimsToBoxGeom, findByPath, getFaceBBox } from "../geometryUtils";
 
 import { useSceneStore } from "../../store";
 
@@ -251,6 +245,41 @@ export function initControls(ctx) {
   const CLICK_DIST = 6; // px
 
   renderer.domElement.addEventListener("pointerdown", (ev) => {
+    if (store.constraintMode) {
+      // 射线检测
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mouse = new THREE.Vector2(
+        ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+        -((ev.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, camera);
+
+      const hits = raycaster.intersectObjects(
+        [...meshMap.values()].filter((m) => m.visible),
+        false
+      );
+
+      if (hits.length) {
+        /* 找到真正的 mesh（可能点到 LineSegments/label） */
+        let mesh = hits[0].object;
+        while (mesh && !mesh.userData?.pathArr) mesh = mesh.parent;
+        if (mesh) {
+          const path = mesh.userData.pathArr;
+          const node = findByPath(store.furnitureTree, path);
+
+          if (node?.isLeaf) {
+            // —— 参考板件 —— //
+            store.setConstraintRef(path);
+          } else {
+            // —— 目标子结构（原子组 / 任意 group）—— //
+            store.toggleConstraintTarget(node.path);
+          }
+        }
+      }
+      return; // 不再执行普通选中逻辑
+    }
+
     // 仅 drag / axis 模式接管
     // if (!["drag", "axis"].includes(ctx.currentMode)) return;
     if (!["drag", "axis", "connect"].includes(ctx.currentMode)) return;
@@ -340,14 +369,6 @@ export function initControls(ctx) {
         break;
 
       case "connect":
-        // snap 模式完全接管，关闭 gizmo
-        // tc.detach();
-        // tc.enabled = false;
-        // selectMesh(null);
-        // ctx.resetSnapMode?.();                /* 清空 snap 内部状态 */
-        // break;
-        /* 连接模式也需要 TransformControls，但仅显示三轴把手            *
-         * 由 snap.js 决定何时 attach 到 mesh                           */
         tc.enabled = true;
         tc.setMode("translate");
         /* 先确保不把 gizmo 绑定到随机对象，等 snap.js 选中后再 attach */
@@ -361,6 +382,15 @@ export function initControls(ctx) {
         tc.enabled = false;
         selectMesh(null);
         ctx.resetPlanarMode?.(); // 进入模式先清空自身状态
+        break;
+
+      /* ---------- 新增：约束缩放 ---------- */
+      case "constraint":
+        tc.detach(); // 不需要 gizmo
+        tc.enabled = false;
+        selectMesh(null);
+        ctx.resetPlanarMode?.();
+        ctx.resetSnapMode?.();
         break;
     }
 
