@@ -170,6 +170,9 @@ export function initSnapMode(ctx) {
     }
     candidate = cand; // 挂到外层方便调试
 
+    const pathA = cand.meshA.userData.pathStr;
+    const pathB = cand.meshB.userData.pathStr;
+
     /* ================================================================
      * 1. 让 compMove 整体沿 candidate.delta 贴到 faceB
      * ============================================================= */
@@ -236,6 +239,8 @@ export function initSnapMode(ctx) {
         [objB]: "",
         faceA: cand.faceA.name,
         faceB: cand.faceB.name,
+        pathA: pathA, // ← 直接用已存在变量
+        pathB: pathB, //
       };
       store.updateConnections(
         withUniqueConn(store.connections, objA, objB, connObj)
@@ -273,6 +278,14 @@ export function initSnapMode(ctx) {
       lenBaxis = new THREE.Box3().setFromObject(cand.meshB).getSize(vec)[axis];
 
       // 连接对象
+      //   slidingConn = {
+      //     [objA]: "",
+      //     [objB]: "",
+      //     faceA: cand.faceA.name,
+      //     faceB: cand.faceB.name,
+      //     axis,
+      //     ratio: dec2frac(centerRatio(cand.meshA, cand.meshB, axis)),
+      //   };
       slidingConn = {
         [objA]: "",
         [objB]: "",
@@ -280,7 +293,11 @@ export function initSnapMode(ctx) {
         faceB: cand.faceB.name,
         axis,
         ratio: dec2frac(centerRatio(cand.meshA, cand.meshB, axis)),
+        /* 显式记录绝对路径 ↓↓↓ */
+        pathA: pathA, // ← 直接用已存在变量
+        pathB: pathB, //
       };
+
       store.updateConnections(
         withUniqueConn(store.connections, objA, objB, slidingConn),
         true
@@ -346,6 +363,8 @@ export function initSnapMode(ctx) {
         axisV: freeAxes[1],
         ratioU: dec2frac(centerRatio(cand.meshA, cand.meshB, freeAxes[0])),
         ratioV: dec2frac(centerRatio(cand.meshA, cand.meshB, freeAxes[1])),
+        pathA: pathA, // ← 直接用已存在变量
+        pathB: pathB, //
       };
       store.updateConnections(
         withUniqueConn(store.connections, objA, objB, slidingConn),

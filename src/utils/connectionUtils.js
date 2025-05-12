@@ -7,6 +7,8 @@ const RESERVED = new Set([
   "axisV",
   "ratioU",
   "ratioV",
+  "pathA",
+  "pathB", // ★ 新增：显式路径
 ]);
 
 export { RESERVED }; // 导出该常量

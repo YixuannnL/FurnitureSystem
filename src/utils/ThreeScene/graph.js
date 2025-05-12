@@ -40,6 +40,17 @@ export function initGraph(ctx) {
 
     // 2. 遍历连接数据
     conns.forEach((pair) => {
+      /* ---------- 优先：若连接对象直接给了 pathA / pathB ---------- */
+      if (pair.pathA && pair.pathB) {
+        const pa = pair.pathA,
+          pb = pair.pathB;
+        if (meshMap.has(pa) && meshMap.has(pb) && pa !== pb) {
+          graph.get(pa).add(pb);
+          graph.get(pb).add(pa);
+        }
+        return; // 跳过后续“按名称”逻辑
+      }
+
       const keys = meshKeys(pair);
       if (keys.length < 2) return; // 防御
       const [nameA, nameB] = keys; // 两端短名
