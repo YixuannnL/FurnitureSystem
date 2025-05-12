@@ -4,6 +4,7 @@
       <h5>{{ grp.name }} ({{ grp.conns.length }})</h5>
       <div v-for="(c, i) in grp.conns" :key="i" class="row">
         <code>{{ Object.keys(c)[0] }} ↔ {{ Object.keys(c)[1] }}</code>
+        <button class="del" @click="del(c)">删</button>
       </div>
       <hr v-if="!$last" />
     </template>
@@ -45,6 +46,16 @@ const groups = computed(() => {
     })
     .filter((g) => g.conns.length);
 });
+
+/* ---------- 删除某条连接 ---------- */
+function del(conn) {
+  const idx = store.connections.indexOf(conn);
+  if (idx > -1) {
+    const next = store.connections.slice();
+    next.splice(idx, 1);
+    store.updateConnections(next);
+  }
+}
 </script>
 
 <style scoped>
@@ -55,5 +66,10 @@ hr {
   border: none;
   border-top: 1px dashed #ddd;
   margin: 6px 0;
+}
+.del {
+  font-size: 12px;
+  padding: 0 6px;
+  border-radius: 3px;
 }
 </style>
