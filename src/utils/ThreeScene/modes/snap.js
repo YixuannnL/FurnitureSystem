@@ -561,8 +561,8 @@ export function initSnapMode(ctx) {
         /* 1. 已写入 ratio；进入“第三段”等待确认 */
         ratioAdjustStage = true;
         store.setHint(
-          `如果需要进一步精细调整，` +
-            `请在右侧输入位置比例后点击“确认”，` +
+          `如果需要进一步精细调整，(如shelf在侧板的1/3位置)` +
+            `请在右侧输入位置比例（如1/2、1/3、1/4等）后点击“确认”，` +
             `这条连接就完成啦！`
         );
 
