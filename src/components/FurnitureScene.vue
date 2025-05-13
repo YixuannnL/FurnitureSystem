@@ -1,6 +1,9 @@
 <template>
   <div class="scene-wrapper">
     <canvas ref="canvasEl" class="canvas"></canvas>
+
+    <!-- 功能介绍：Step ≠ 0 时显示 -->
+    <FeatureIntroOverlay v-if="step !== 0" />
     <!-- Step 1 时显示当前子结构名称 -->
     <div v-if="step === 1" class="group-label">{{ groupName }}</div>
 
@@ -20,6 +23,7 @@ import { createThreeContext } from "../utils/ThreeScene";
 import DescriptionOverlay from "./DescriptionOverlay.vue";
 import StepIndicator from "./StepIndicator.vue";
 import HintBubble from "./HintBubble.vue";
+import FeatureIntroOverlay from "./FeatureIntroOverlay.vue";
 
 const store = useSceneStore();
 const canvasEl = ref(null);

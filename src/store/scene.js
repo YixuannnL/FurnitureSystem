@@ -80,6 +80,9 @@ export const useSceneStore = defineStore("scene", {
     constraintAxis: "x", // "x"|"y"|"z"
     constraintRatios: [], // e.g.  [1,1,1]  与 targets 对齐
     constraintHistory: [], // 每次执行后 push 记录
+
+    /* —— 功能介绍面板显隐 —— */
+    showFeatureIntro: true,
   }),
 
   getters: {
@@ -196,6 +199,10 @@ export const useSceneStore = defineStore("scene", {
   },
 
   actions: {
+    toggleFeatureIntro() {
+      this.showFeatureIntro = !this.showFeatureIntro;
+    },
+
     /* —— 切换模式 —— */
     enterConstraintMode() {
       if (this.step !== 2) return;
