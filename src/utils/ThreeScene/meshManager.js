@@ -202,11 +202,11 @@ export function initMeshManager(ctx) {
 
     /* userData */
     mesh.userData = {
-      pathArr: node.path,
-      path: node.path,
-      pathStr,
-      faceBBox: getFaceBBox(mesh) /* ← 新增 */,
-      label,
+      pathArr: [...pathArr], // 例如 ['Cabinet', 'Shelf', 'panel_1']
+      path: [...pathArr], // 与其它模块保持字段一致
+      pathStr, // 'Cabinet/Shelf/panel_1'
+      faceBBox: getFaceBBox(mesh), // 六面几何数据
+      label, // CSS2DObject
     };
 
     /* 默认摆到父组包围盒中心 */
