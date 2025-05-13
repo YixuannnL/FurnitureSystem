@@ -427,12 +427,13 @@ export const useSceneStore = defineStore("scene", {
       });
 
       /* 4. 重建无向图 & 通知 UI 刷新 */
-      this.threeCtx?.updateConnections(this.connections);
+      //   this.threeCtx?.updateConnections(this.connections);
+      this.updateConnections(this.connections, /* skipUndo */ true);
 
       /* ========= 5. 写入历史 & 清空状态 ========= */
       this.constraintHistory.unshift({
         time: Date.now(),
-        axis,
+        axis: this.constraintAxis,
         targets: JSON.parse(JSON.stringify(this.constraintTargets)),
         ref: [...this.constraintRefPath],
         ratios: [...this.constraintRatios],
