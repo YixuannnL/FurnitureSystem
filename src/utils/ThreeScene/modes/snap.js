@@ -1007,22 +1007,37 @@ export function initSnapMode(ctx) {
 
       /* ------- 吸附目标 (端点 / 中点 / 网格) ------- */
       offset = THREE.MathUtils.clamp(offset, minOff, maxOff);
-
-      //   const snapT = SNAP_T();
-      //   const targets = [minOff, 0, maxOff];
-      //   let snapped = null;
-      //   for (const t of targets) {
-      //     if (Math.abs(offset - t) < snapT) {
-      //       snapped = t;
-      //       break;
-      //     }
-      //   }
-      //   if (snapped === null) {
-      //     const g = gridSnap(offset, store.gridStep);
-      //     if (Math.abs(offset - g) < snapT) snapped = g;
-      //   }
       const snapT = SNAP_T(); // 原“面-贴-面 / 网格”阈
+
+      /* -------- 枚举可吸附的 offset -------- */
+      const targets = [minOff, 0, maxOff]; // ① 自己 & meshB
+
+      /* ② 其它可见 mesh 的左右(上下/前后) 面 */
+      ctx.meshMap.forEach((m, pathStr) => {
+        if (
+          !m.visible ||
+          slidingComp.includes(pathStr) || // 本组自己
+          pathStr === meshB.userData.pathStr // 参考 B 已在 targets
+        )
+          return;
+
+        const box = new THREE.Box3().setFromObject(m);
+        const minC = box.min[axis];
+        const maxC = box.max[axis];
+
+        /* A-右面 ↔ C-左面 */
+        targets.push(minC - halfA - ctrB);
+        /* A-左面 ↔ C-右面 */
+        targets.push(maxC + halfA - ctrB);
+      });
+
       let snapped = null;
+      for (const t of targets) {
+        if (Math.abs(offset - t) < edgeSnapT) {
+          snapped = t;
+          break;
+        }
+      }
 
       /* ① 先试左右两端面吸附（阈值 edgeSnapT） */
       if (Math.abs(offset - minOff) < edgeSnapT) snapped = minOff;
