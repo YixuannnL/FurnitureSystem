@@ -137,6 +137,11 @@ export function initMeshManager(ctx) {
     /* 从场景移除并彻底释放 GPU 资源 */
     mesh.parent?.remove(mesh);
     mesh.traverse((o) => {
+      /* —— 清理 CSS2D 标签 —— */
+      if (o.isCSS2DObject && o.element && o.element.parentElement) {
+        o.element.parentElement.removeChild(o.element);
+      }
+
       o.geometry?.dispose?.();
       if (o.material) {
         Array.isArray(o.material)
