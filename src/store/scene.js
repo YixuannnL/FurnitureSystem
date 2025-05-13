@@ -83,6 +83,8 @@ export const useSceneStore = defineStore("scene", {
 
     /* —— 功能介绍面板显隐 —— */
     showFeatureIntro: true,
+
+    constraintSelectMode: "target",
   }),
 
   getters: {
@@ -211,6 +213,7 @@ export const useSceneStore = defineStore("scene", {
       this.constraintRefPath = [];
       this.constraintRatios = [];
       this.constraintAxis = "x";
+      this.constraintSelectMode = "target"; // ✚ 进入时默认选目标
       this.mode = "constraint"; // 让 controls 等知道
       this.threeCtx?.setMode("constraint");
     },
@@ -219,6 +222,7 @@ export const useSceneStore = defineStore("scene", {
       this.constraintTargets = [];
       this.constraintRefPath = [];
       this.constraintRatios = [];
+      this.constraintSelectMode = "target"; // Δ 退出后复位
       if (this.mode === "constraint") {
         this.mode = "drag";
         this.threeCtx?.setMode("drag");
@@ -261,6 +265,12 @@ export const useSceneStore = defineStore("scene", {
     setConstraintAxis(axis) {
       if (["x", "y", "z"].includes(axis)) this.constraintAxis = axis;
     },
+    /* 选取模式切换 */
+    setConstraintSelectMode(mode) {
+      if (mode === "target" || mode === "ref") {
+        this.constraintSelectMode = mode;
+      }
+    },
     setConstraintRatio(idx, val) {
       const n = parseFloat(val);
       if (isFinite(n) && n > 0) this.constraintRatios[idx] = n;
@@ -284,10 +294,38 @@ export const useSceneStore = defineStore("scene", {
       const refSize = new THREE.Box3()
         .setFromObject(refMesh)
         .getSize(new THREE.Vector3())[axis];
-
-      /* 比例归一化 → 每组目标长度 */
-      const sumR = this.constraintRatios.reduce((s, v) => s + v, 0);
-      const targetLens = this.constraintRatios.map((r) => (r / sumR) * refSize);
+      const thicknessThresh = 5.01; // ≤5 mm 视为“厚度”
+      const infos = this.constraintTargets.map((pathArr, idx) => {
+        const pathStr = pathArr.join("/");
+        let size;
+        if (this.threeCtx.meshMap.has(pathStr)) {
+          // 叶子板件：直接用 mesh 包围盒
+          const m = this.threeCtx.meshMap.get(pathStr);
+          size = new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3())[
+            axis
+          ];
+        } else {
+          // 子结构组：用 Group 包围盒
+          const grp = this.threeCtx.scene.getObjectByName(pathStr);
+          size = grp
+            ? new THREE.Box3().setFromObject(grp).getSize(new THREE.Vector3())[
+                axis
+              ]
+            : 0;
+        }
+        return { size, ratio: this.constraintRatios[idx] };
+      });
+      // 把所有“厚度板”（size ≤ thresh）当固定尺寸
+      const thicknessSum = infos
+        .filter((f) => f.size <= thicknessThresh)
+        .reduce((sum, f) => sum + f.size, 0);
+      const remaining = Math.max(refSize - thicknessSum, 0);
+      // 剩余空间按 ratio 分给“大”目标
+      const adjustable = infos.filter((f) => f.size > thicknessThresh);
+      const sumRatio = adjustable.reduce((sum, f) => sum + f.ratio, 0) || 1;
+      const targetLens = infos.map((f) =>
+        f.size <= thicknessThresh ? f.size : (f.ratio / sumRatio) * remaining
+      );
 
       /* 1. 拍快照 (整动作一次) */
       this.recordSnapshot();
@@ -329,7 +367,7 @@ export const useSceneStore = defineStore("scene", {
           })();
           const dimKey =
             axis === "x" ? "width" : axis === "y" ? "height" : "depth";
-          const isThickness = dims[dimKey] <= 5.01; // ≤5 mm 视为厚度
+          const isThickness = dims[dimKey] <= thicknessThresh;
 
           /* ---- 位置微调以保持两端固定 ---- */
           const delta = (scale - 1) * (obj.position[axis] - center[axis]);

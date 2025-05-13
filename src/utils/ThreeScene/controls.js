@@ -268,12 +268,25 @@ export function initControls(ctx) {
           const path = mesh.userData.pathArr;
           const node = findByPath(store.furnitureTree, path);
 
-          if (node?.isLeaf) {
-            // —— 参考板件 —— //
-            store.setConstraintRef(path);
+          // if (node?.isLeaf) {
+          //   // —— 参考板件 —— //
+          //   store.setConstraintRef(path);
+          // } else {
+          //   // —— 目标子结构（原子组 / 任意 group）—— //
+          //   store.toggleConstraintTarget(node.path);
+          // }
+          const modeSel = store.constraintSelectMode; // ✚
+
+          if (modeSel === "ref") {
+            // 选择参考板
+            if (node?.isLeaf) store.setConstraintRef(path);
           } else {
-            // —— 目标子结构（原子组 / 任意 group）—— //
-            store.toggleConstraintTarget(node.path);
+            // 选择目标
+            if (node?.isLeaf) {
+              store.toggleConstraintTarget(path); // 叶板件
+            } else {
+              store.toggleConstraintTarget(node.path); // 子结构
+            }
           }
         }
       }

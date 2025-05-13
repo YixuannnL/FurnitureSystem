@@ -21,8 +21,18 @@
     </section>
 
     <!-- 1. 已选子结构 -->
+    <!--  目标对象（子结构或板件）-->
     <section>
-      <h5>目标子结构 ({{ targets.length }})</h5>
+      <h5>
+        目标对象 ({{ targets.length }})
+        <button
+          class="pick-btn"
+          :class="{ active: selMode === 'target' }"
+          @click="pickTarget"
+        >
+          {{ selMode === "target" ? "正在选择…" : "选择" }}
+        </button>
+      </h5>
       <ul>
         <li v-for="(p, i) in targets" :key="i">
           {{ p.at(-1) }}
@@ -41,8 +51,19 @@
     </section>
 
     <!-- 2. 参考板 -->
+    <!--  参考板件 -->
     <section>
-      <h5>参考板件</h5>
+      <h5>
+        参考板件
+        <button
+          class="pick-btn"
+          :class="{ active: selMode === 'ref' }"
+          @click="pickRef"
+        >
+          {{ selMode === "ref" ? "正在选择…" : "选择" }}
+        </button>
+      </h5>
+
       <p v-if="ref.length">
         {{ ref.at(-1) }}
         <button @click="clearRef">×</button>
@@ -69,6 +90,9 @@ import { computed } from "vue";
 import { useSceneStore } from "../store";
 const store = useSceneStore();
 
+/*  当前选取模式 */
+const selMode = computed(() => store.constraintSelectMode);
+
 const targets = computed(() => store.constraintTargets);
 const ref = computed(() => store.constraintRefPath);
 const axis = computed({
@@ -77,6 +101,13 @@ const axis = computed({
 });
 const ratios = computed(() => store.constraintRatios);
 const history = computed(() => store.constraintHistory);
+
+function pickTarget() {
+  store.setConstraintSelectMode("target");
+}
+function pickRef() {
+  store.setConstraintSelectMode("ref");
+}
 
 function toggle(p) {
   store.toggleConstraintTarget(p);
@@ -142,5 +173,16 @@ input {
 .history li {
   list-style: disc;
   margin-bottom: 2px;
+}
+/*  按钮视觉 */
+.pick-btn {
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 4px;
+}
+.pick-btn.active {
+  background: #42b983;
+  color: #fff;
 }
 </style>
